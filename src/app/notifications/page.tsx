@@ -6,7 +6,7 @@ import { Button, Card, Empty, PageHeader } from "@/components/ui";
 import { clearNotifications, markNotificationsRead } from "@/lib/store/actions";
 import { useData } from "@/lib/store/selectors";
 
-const ICON: Record<string, string> = { card: "💳", bill: "🧾", recurring: "🔁", budget: "📊", ipo: "🚀", nudge: "🌙", brief: "☀️", friend: "👥", digest: "📬", report: "📉" };
+const ICON: Record<string, string> = { card: "💳", bill: "🧾", recurring: "🔁", budget: "📊", ipo: "🚀", nudge: "🌙", brief: "☀️", cash: "🏦", friend: "👥", digest: "📬", report: "📉" };
 
 export default function NotificationsPage() {
   const d = useData();

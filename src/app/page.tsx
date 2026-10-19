@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, HardDriveDownload, Info, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
+import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, HardDriveDownload, Info, Landmark, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { ChallengeCard, CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
@@ -18,7 +18,7 @@ import { isLive, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
 import { occurrencesInRange } from "@/lib/domain/recurring";
 import { contribute, getProfile, updateProfile } from "@/lib/store/actions";
-import { useCardSummaries, useCycle, useData, useFrequent, useFriendBalances, useLookups, usePrevCycle, useSafeToSpend, useToday } from "@/lib/store/selectors";
+import { useCardSummaries, useCashForecast, useCycle, useData, useFrequent, useFriendBalances, useLookups, usePrevCycle, useSafeToSpend, useToday } from "@/lib/store/selectors";
 import { useStore } from "@/lib/store/store";
 import type { Transaction } from "@/lib/types";
 
@@ -38,6 +38,7 @@ export default function Home() {
   const [breakdown, setBreakdown] = useState(false);
   const [closing, setClosing] = useState(false);
   const [spotted, dismissSpotted] = useSpotted();
+  const cash = useCashForecast(35);
   const userId = useStore((s) => s.userId);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   useEffect(() => setLastBackup(lastBackupAt()), []);
@@ -277,6 +278,19 @@ export default function Home() {
         )}
       </Card>
 
+      <Link href="/plan/cashflow" className="mt-2 flex items-center gap-3 rounded-3xl border border-line bg-surface p-3.5 shadow-card transition active:scale-[0.99]">
+        <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl", cash.shortfall ? "bg-bad/15 text-bad" : "bg-accent/12 text-accent")}>
+          <Landmark size={18} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold">{cash.shortfall ? `Bank runs short on ${fmtDate(cash.shortfall.date)}` : "Lowest bank balance ahead"}</span>
+          <span className="block truncate text-xs text-muted">
+            {formatINR(Math.round(cash.low.balance))} on {fmtDate(cash.low.date)} · next 5 weeks
+          </span>
+        </span>
+        <Sparkline values={cash.points.map((p) => p.balance)} bad={!!cash.shortfall} />
+      </Link>
+
       {/* Budgets */}
       {env.length > 0 && (
         <>
@@ -435,5 +449,22 @@ function BreakdownSheet({ open, onClose }: { open: boolean; onClose: () => void 
         </p>
       </div>
     </Sheet>
+  );
+}
+
+/** Tiny inline trend line, no axes: shape only (the numbers are in the text). */
+function Sparkline({ values, bad }: { values: number[]; bad?: boolean }) {
+  if (values.length < 2) return null;
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 1);
+  const w = 72;
+  const h = 28;
+  const pts = values.map((v, i) => `${(i / (values.length - 1)) * w},${h - ((v - min) / (max - min || 1)) * h}`).join(" ");
+  const zero = h - ((0 - min) / (max - min || 1)) * h;
+  return (
+    <svg width={w} height={h} className="shrink-0 overflow-visible" aria-hidden>
+      {min < 0 && <line x1={0} x2={w} y1={zero} y2={zero} stroke="var(--bad)" strokeDasharray="2 2" strokeWidth={1} />}
+      <polyline points={pts} fill="none" stroke={bad ? "var(--bad)" : "var(--accent)"} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }

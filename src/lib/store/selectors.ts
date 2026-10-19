@@ -3,10 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { type CardSummary, summariseCard } from "../domain/cards";
 import { type Cycle, getCycle, previousCycle } from "../domain/cycle";
-import { istDate } from "../domain/dates";
+import { addDays, istDate } from "../domain/dates";
 import { friendBalances } from "../domain/friends";
+import { cashEvents, cashForecast } from "../domain/cashflow";
 import { frequentSpends, streakInfo, trackedDays } from "../domain/habits";
-import { netWorth } from "../domain/insights";
+import { forecastMonthEnd, netWorth } from "../domain/insights";
+import { occurrencesInRange } from "../domain/recurring";
 import { accountBalance, isLive, txnDate } from "../domain/ledger";
 import { computeSafeToSpend, type SafeToSpend } from "../domain/safeToSpend";
 import type { Account, Tables } from "../types";
@@ -117,4 +119,33 @@ export function useFrequent(n = 6) {
   const d = useData();
   const today = useToday();
   return useMemo(() => frequentSpends(d.transactions, today, n), [d.transactions, today, n]);
+}
+
+/**
+ * Bank balance over the next `days` days. Everyday spending uses the routine
+ * run-rate, counting only the share you pay from the bank (card swipes reach
+ * the bank later as the card bill, which is already an event).
+ */
+export function cashForecastFor(d: Tables, today: string, days = 35) {
+  const sts = safeToSpendFor(d, today);
+  const cards = cardSummaries(d, today);
+  const until = addDays(today, days);
+  const cardIds = new Set(d.credit_cards.map((c) => c.account_id));
+  const liquidIds = new Set(d.accounts.filter((a) => a.type === "savings" || a.type === "cash" || a.type === "wallet").map((a) => a.id));
+  const occ = occurrencesInRange(d.recurring_rules, d.transactions, today, until);
+  const events = cashEvents(occ, cards, today, until, liquidIds, cardIds);
+  const recent = liveTxns(d).filter((t) => t.type === "expense" && !t.recurring_rule_id && istDate(t.occurred_at) >= addDays(today, -30));
+  const total = recent.reduce((a, t) => a + (t.my_share ?? t.amount), 0);
+  const viaBank = recent.filter((t) => !(t.account_id && cardIds.has(t.account_id)) && !t.paid_by_friend_id).reduce((a, t) => a + (t.my_share ?? t.amount), 0);
+  const bankShare = total > 0 ? viaBank / total : 1;
+  const runRate = forecastMonthEnd(d.transactions, cycleFor(d, today), today, 0).runRate;
+  const dailySpend = Math.round(runRate * bankShare);
+  const start = sts.liquid - sts.holds;
+  return { ...cashForecast(start, today, days, events, dailySpend), dailySpend, start };
+}
+
+export function useCashForecast(days = 35) {
+  const d = useData();
+  const today = useToday();
+  return useMemo(() => cashForecastFor(d, today, days), [d, today, days]);
 }

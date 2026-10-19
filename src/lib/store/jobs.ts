@@ -16,7 +16,7 @@ import { formatINR } from "../domain/money";
 import { dueToPost, occurrencesInRange, periodDays } from "../domain/recurring";
 import type { AppNotification, Tables } from "../types";
 import { del, getProfile, occurrenceTxn, postEmiCharges, purgeTrash, up } from "./actions";
-import { cardSummaries, salaryDates, safeToSpendFor } from "./selectors";
+import { cardSummaries, cashForecastFor, salaryDates, safeToSpendFor } from "./selectors";
 import { type Change, getData, nowIso, uid, useStore } from "./store";
 
 function notif(id: string, kind: string, title: string, body: string, href: string | null = null): AppNotification {
@@ -133,6 +133,19 @@ export function runJobs(now = new Date()) {
   }
   if (cycle.end === today) push(notif(`monthend-${cycle.start}`, "report", "Last day of the budget month", "See where the money went and move leftovers to a goal.", "/reports"));
   ran("budget_pace", "ok");
+
+  // --- low balance ahead: warn a week before the bank would run short ---
+  const cash = cashForecastFor(d, today, 21);
+  if (cash.shortfall && diffDays(cash.shortfall.date, today) <= 7) {
+    const hit = cash.events.find((e) => e.date === cash.shortfall!.date && e.amount < 0);
+    push(notif(
+      `shortfall-${cash.shortfall.date}`,
+      "cash",
+      `Bank balance may run short on ${fmtDate(cash.shortfall.date)}`,
+      `${hit ? `${hit.label} (${formatINR(-hit.amount)}) is due then. ` : ""}Projected low ${formatINR(Math.round(cash.low.balance))}. Move money in or hold off big spends.`,
+      "/plan/cashflow",
+    ));
+  }
 
   // --- snapshot_net_worth (23:55) ---
   const nw = netWorth(d.accounts, d.transactions, d.settlements, d.holdings, d.transaction_splits);
