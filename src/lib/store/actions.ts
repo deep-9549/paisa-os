@@ -10,6 +10,7 @@ import { computeSplit, type Participant } from "../domain/friends";
 import { roundUp } from "../domain/goals";
 import { appliedShares, blockedAmount, issuePrice, realisedPnl, releaseOnAllotment } from "../domain/ipo";
 import { merchantKey } from "../domain/parser";
+import type { RecurringCandidate } from "../domain/recurring";
 import { round2 } from "../domain/money";
 import type {
   Account, CardEmi, Category, CreditCard, Friend, Goal, Hold, ID, IpoApplication, PayMethod, Profile,
@@ -218,9 +219,31 @@ export function addTransaction(input: NewTxnInput, opts: { silent?: boolean } = 
   }
 
   commit(changes);
-  if (!opts.silent) toast(`Saved ₹${t.amount.toLocaleString("en-IN")}${t.merchant ? ` · ${t.merchant}` : ""}`);
+  if (!opts.silent) {
+    navigatorVibrate(15);
+    toast(`Saved ₹${t.amount.toLocaleString("en-IN")}${t.merchant ? ` · ${t.merchant}` : ""}`, { label: "Undo", run: () => undoAdd(changes, d) });
+  }
   return t;
 }
+
+/** Reverse an addTransaction commit exactly: drop its rows, restore merchant memory. */
+function undoAdd(changes: Change[], before: Tables) {
+  const back: Change[] = [];
+  for (const c of changes) {
+    if (c.op !== "upsert" || !c.row) continue;
+    const key = String(c.row[c.table === "credit_cards" ? "account_id" : "id"]);
+    if (c.table === "merchant_memory") {
+      const prev = before.merchant_memory.find((m) => m.id === key);
+      back.push(prev ? up("merchant_memory", prev) : del("merchant_memory", key));
+    } else if (c.table !== "friends") back.push(del(c.table, key));
+  }
+  commit(back);
+  toast("Removed");
+}
+
+const navigatorVibrate = (ms: number) => {
+  if (typeof navigator !== "undefined") navigator.vibrate?.(ms);
+};
 
 export function updateTransaction(t: Transaction, patch: Partial<Transaction>, split?: SplitInput | null) {
   const d = getData();
@@ -364,6 +387,16 @@ export function newRule(p: Partial<RecurringRule> & { name: string; amount: numb
     method: "upi", category_id: null, auto_post: false, active: true, landlord: null, landlord_pan: null,
     property_address: null, escalation_pct: 0, deposit: 0, last_used_note: null, tags: [], ...p,
   };
+}
+
+/** Start tracking a repeating spend found by detectRecurring. */
+export function trackCandidate(c: RecurringCandidate) {
+  saveRule(newRule({
+    name: c.merchant, amount: c.amount, kind: c.kind, frequency: c.frequency, due_day: c.dueDay,
+    start_date: addDays(c.last, 1), method: c.method, account_id: c.account_id, category_id: c.category_id,
+    auto_post: c.kind === "subscription",
+  }));
+  toast(`Tracking ${c.merchant} as ${c.frequency}`);
 }
 
 export function deleteRule(id: string) {

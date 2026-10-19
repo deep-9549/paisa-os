@@ -74,6 +74,9 @@ function AddFromUrl() {
     if (params.get("add") === "1") {
       useStore.getState().setQuickAdd({ open: true, text: params.get("text") ?? undefined });
       router.replace("/");
+    } else if (params.get("ask") === "1") {
+      useStore.getState().set({ askOpen: true });
+      router.replace("/");
     }
   }, [params, router]);
   return null;

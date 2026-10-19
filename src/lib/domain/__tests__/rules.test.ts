@@ -5,7 +5,7 @@ import { billEffect, computeSplit, friendBalances, simplifyDebts, upiPayLink } f
 import { goalReserve, plannedMonthly, roundUp } from "../goals";
 import { blockedAmount, listingGainPct, realisedPnl, releaseOnAllotment, taxEstimate } from "../ipo";
 import { parseQuickAdd } from "../parser";
-import { expectedAmount, occurrences } from "../recurring";
+import { detectRecurring, expectedAmount, occurrences } from "../recurring";
 import { computeSafeToSpend } from "../safeToSpend";
 import { parseBankSms } from "../sms";
 import { acct, txn } from "./fixtures";
@@ -236,5 +236,22 @@ describe("bank SMS parser", () => {
   it("salary credit", () => {
     const d = parseBankSms("Your A/c XX1234 is credited with Rs.80,000.00 on 01-10-2026 by NEFT from ACME TECHNOLOGIES. Avl Bal Rs.95,000");
     expect(d).toMatchObject({ amount: 80000, direction: "credit", method: "netbanking" });
+  });
+});
+
+describe("recurring detection", () => {
+  it("finds an untracked monthly subscription", () => {
+    const mk = (date: string, amount = 649, merchant = "Spotify") => txn({ date, amount, merchant });
+    const txns = [mk("2026-07-05"), mk("2026-08-05"), mk("2026-09-05"), mk("2026-10-05"), mk("2026-10-01", 120, "Chai"), mk("2026-10-02", 900, "Chai"), mk("2026-10-09", 40, "Chai")];
+    const c = detectRecurring(txns, [], "2026-10-19");
+    expect(c).toHaveLength(1);
+    expect(c[0]).toMatchObject({ merchant: "Spotify", frequency: "monthly", dueDay: 5, amount: 649, kind: "subscription" });
+  });
+  it("ignores ones already tracked or stopped", () => {
+    const mk = (date: string) => txn({ date, amount: 199, merchant: "Netflix" });
+    const txns = [mk("2026-04-05"), mk("2026-05-05"), mk("2026-06-05")];
+    expect(detectRecurring(txns, [], "2026-10-19")).toHaveLength(0);
+    const live = [mk("2026-08-05"), mk("2026-09-05"), mk("2026-10-05")];
+    expect(detectRecurring(live, [{ name: "Netflix" } as never], "2026-10-19")).toHaveLength(0);
   });
 });

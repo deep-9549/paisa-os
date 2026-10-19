@@ -4,13 +4,14 @@ import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Light
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
+import { SpottedCard, useSpotted } from "@/components/Spotted";
 import { TxnDetailSheet } from "@/components/TxnDetail";
 import { TxnRow } from "@/components/TxnRow";
 import { Amount, Avatar, Button, Card, Empty, IconButton, Progress, SectionTitle, Sheet, cn } from "@/components/ui";
 import { envelopes } from "@/lib/domain/budgets";
 import { recentCycles } from "@/lib/domain/cycle";
 import { addDays, diffDays, fmtDate, relativeDay } from "@/lib/domain/dates";
-import { anomalies } from "@/lib/domain/insights";
+import { anomalies, forecastMonthEnd } from "@/lib/domain/insights";
 import { isLive, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
 import { occurrencesInRange } from "@/lib/domain/recurring";
@@ -34,6 +35,7 @@ export default function Home() {
   const syncStatus = useStore((s) => s.syncStatus);
   const [breakdown, setBreakdown] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [spotted, dismissSpotted] = useSpotted();
   // Deep link from the evening notification: /?close=1
   useEffect(() => {
     if (new URLSearchParams(location.search).get("close") === "1") {
@@ -67,6 +69,9 @@ export default function Home() {
   const greeting = hour < 5 ? "Up late" : hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const isLastDays = diffDays(cycle.end, today) <= 2;
   const dueCards = cards.filter((c) => c.nextDue && c.nextDue.amount > 0 && diffDays(c.nextDue.date, today) <= 7);
+  // Projected leftover: what's left now minus the routine run-rate for the remaining days.
+  const forecast = useMemo(() => forecastMonthEnd(d.transactions, cycle, today, 0), [d.transactions, cycle, today]);
+  const paceEnd = sts.month - forecast.runRate * Math.max(sts.daysLeft - 1, 0) - sts.variableUpcoming;
   const todayPct = sts.dailyAllowance > 0 ? Math.min(sts.spentToday / sts.dailyAllowance, 1) : sts.spentToday > 0 ? 1 : 0;
 
   if (!d.accounts.length) return <Empty icon={<Wallet />} title="No accounts yet" body="Finish setup to see your Safe-to-Spend." action={<Link href="/onboarding" className="font-semibold text-accent">Start setup →</Link>} />;
@@ -141,6 +146,11 @@ export default function Home() {
             <span>{sts.daysLeft} day{sts.daysLeft === 1 ? "" : "s"} left · ends {fmtDate(cycle.end)}</span>
           </div>
           <Progress value={used} tone={tone} marker={elapsed} label="Budget used versus month elapsed" />
+          {sts.daysLeft > 1 && sts.income > 0 && (
+            <p className={cn("mt-2 text-xs font-medium", paceEnd >= 0 ? "text-good" : "text-bad")}>
+              {paceEnd >= 0 ? `At this pace you'll end the month with ${formatINR(Math.round(paceEnd))} spare` : `At this pace you'll be ${formatINR(Math.round(-paceEnd))} short by month-end`}
+            </p>
+          )}
         </div>
         <p className="mt-3 text-[11px] leading-relaxed text-muted">
           True cash = bank {formatINR(sts.liquid)} − card dues {formatINR(sts.cardOutstanding)}{sts.holds > 0 && ` − IPO holds ${formatINR(sts.holds)}`}
@@ -166,6 +176,12 @@ export default function Home() {
       </div>
 
       <CloseDayCard onOpen={() => setClosing(true)} />
+
+      {spotted[0] && (
+        <div className="mt-3">
+          <SpottedCard c={spotted[0]} onDismiss={() => dismissSpotted(spotted[0].merchant)} />
+        </div>
+      )}
 
       {/* For you: things that need a tap */}
       {(sts.expectedSalary > 0 || drafts.length > 0 || insights.length > 0 || (isLastDays && sts.month > 0 && d.goals.some((g) => !g.archived))) && (

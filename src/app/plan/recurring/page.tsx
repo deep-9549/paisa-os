@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { SpottedCard, useSpotted } from "@/components/Spotted";
 import { PLAN_TABS, SubTabs } from "@/components/PlanTabs";
 import { Amount, Badge, Button, Card, Empty, Field, Input, PageHeader, Row, SectionTitle, Segmented, Select, Sheet, Toggle } from "@/components/ui";
 import { ordinal } from "@/lib/domain/cycle";
@@ -20,6 +21,7 @@ export default function RecurringPage() {
   const today = useToday();
   const [tab, setTab] = useState<"upcoming" | "all" | "subs" | "rent">("upcoming");
   const [edit, setEdit] = useState<RecurringRule | "new" | null>(null);
+  const [spotted, dismiss] = useSpotted();
   const upcoming = useMemo(() => occurrencesInRange(d.recurring_rules, d.transactions, addDays(today, -10), addDays(today, 35)), [d, today]);
   const subs = d.recurring_rules.filter((r) => r.kind === "subscription");
   const rents = d.recurring_rules.filter((r) => r.kind === "rent");
@@ -30,6 +32,12 @@ export default function RecurringPage() {
       <PageHeader title="Plan" subtitle="Rent, bills, subscriptions, salary and SIPs" action={<Button size="sm" onClick={() => setEdit("new")}>+ Recurring</Button>} />
       <SubTabs tabs={PLAN_TABS} />
       <Segmented value={tab} onChange={setTab} options={[{ value: "upcoming", label: "Upcoming" }, { value: "all", label: "All rules" }, { value: "subs", label: "Subscriptions" }, { value: "rent", label: "Rent" }]} />
+
+      {spotted.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {spotted.slice(0, 3).map((c) => <SpottedCard key={c.merchant} c={c} onDismiss={() => dismiss(c.merchant)} />)}
+        </div>
+      )}
 
       {tab === "upcoming" && (
         <div className="mt-4">

@@ -112,3 +112,63 @@ export function yearlyCost(rule: RecurringRule): number {
   const amt = isVariable(rule) ? ((rule.amount_min ?? 0) + (rule.amount_max ?? 0)) / 2 : rule.amount;
   return round2(amt * perYear);
 }
+
+export interface RecurringCandidate {
+  merchant: string;
+  amount: number;
+  frequency: "monthly" | "weekly" | "yearly";
+  dueDay: number;
+  count: number;
+  last: DateStr;
+  category_id: string | null;
+  method: Transaction["method"];
+  account_id: string | null;
+  kind: "subscription" | "bill";
+}
+
+/**
+ * Spot spends that repeat on a schedule (Netflix, the gym, a weekly maid) but
+ * aren't tracked as recurring yet: 3+ hits from one merchant, roughly evenly
+ * spaced, with amounts within 15% of each other, and still active.
+ */
+export function detectRecurring(txns: Transaction[], rules: RecurringRule[], today: DateStr): RecurringCandidate[] {
+  const known = rules.map((r) => r.name.toLowerCase());
+  const tracked = new Set(txns.filter((t) => t.recurring_rule_id).map((t) => (t.merchant ?? "").toLowerCase()));
+  const by = new Map<string, Transaction[]>();
+  for (const t of txns) {
+    if (!isLive(t) || t.type !== "expense" || !t.merchant || t.recurring_rule_id || t.my_share !== null) continue;
+    const k = t.merchant.trim().toLowerCase();
+    by.set(k, [...(by.get(k) ?? []), t]);
+  }
+  const out: RecurringCandidate[] = [];
+  for (const [k, list] of by) {
+    if (list.length < 3 || tracked.has(k) || known.some((n) => n.includes(k) || k.includes(n))) continue;
+    const sorted = [...list].sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+    const dates = sorted.map(txnDate);
+    const gaps = dates.slice(1).map((d, i) => diffDays(d, dates[i]));
+    const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const freq = avgGap >= 26 && avgGap <= 35 ? "monthly" : avgGap >= 6 && avgGap <= 8 ? "weekly" : avgGap >= 350 && avgGap <= 380 ? "yearly" : null;
+    if (!freq) continue;
+    // Evenly spaced: no gap strays more than 25% (min 3 days) from the average.
+    if (gaps.some((g) => Math.abs(g - avgGap) > Math.max(3, avgGap * 0.25))) continue;
+    const amounts = sorted.map((t) => t.amount);
+    const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
+    if (amounts.some((a) => Math.abs(a - avg) > avg * 0.15)) continue;
+    const last = dates[dates.length - 1];
+    if (diffDays(today, last) > avgGap * 1.6) continue; // stopped
+    const lastTxn = sorted[sorted.length - 1];
+    out.push({
+      merchant: lastTxn.merchant!,
+      amount: round2(lastTxn.amount),
+      frequency: freq,
+      dueDay: parseDate(last).getUTCDate(),
+      count: list.length,
+      last,
+      category_id: lastTxn.category_id,
+      method: lastTxn.method,
+      account_id: lastTxn.account_id,
+      kind: freq === "weekly" || amounts.every((a) => a === amounts[0]) ? "subscription" : "bill",
+    });
+  }
+  return out.sort((a, b) => b.amount - a.amount);
+}
