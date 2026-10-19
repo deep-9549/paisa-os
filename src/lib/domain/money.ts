@@ -46,12 +46,37 @@ export function ariaINR(amount: number): string {
   return `${amount < 0 ? "minus " : ""}${groupIndian(Math.abs(Math.round(amount)).toString())} rupees`;
 }
 
-/** Parse "1,23,456.5", "1.2k", "2L" into rupees. */
+/** Parse "1,23,456.5", "1.2k", "2L" into rupees. Sums like "120+80" add up. */
 export function parseAmount(raw: string): number | null {
+  if (raw.includes("+")) {
+    const parts = raw.split("+").map((x) => x.trim()).filter(Boolean);
+    if (parts.length < 2) return parseAmount(raw.replace(/\+/g, ""));
+    const vals = parts.map(parseOne);
+    let total = 0;
+    for (const v of vals) {
+      if (v === null) return null;
+      total += v;
+    }
+    return round2(total);
+  }
+  return parseOne(raw);
+}
+
+function parseOne(raw: string): number | null {
   const s = raw.trim().toLowerCase().replace(/[₹,\s]/g, "").replace(/^rs\.?/, "");
   const m = s.match(/^(\d+(?:\.\d+)?)(k|l|lakh|cr)?$/);
   if (!m) return null;
   const n = parseFloat(m[1]);
   const mult = m[2] === "k" ? 1e3 : m[2] === "l" || m[2] === "lakh" ? 1e5 : m[2] === "cr" ? 1e7 : 1;
   return round2(n * mult);
+}
+
+/** Live formatting for an amount field: "120000" → "1,20,000"; sums are left as typed. */
+export function groupTyping(v: string): string {
+  if (v.includes("+")) return v.replace(/[^\d.+,]/g, "");
+  const clean = v.replace(/[^\d.]/g, "");
+  const [int, ...rest] = clean.split(".");
+  const frac = rest.length ? `.${rest.join("").slice(0, 2)}` : "";
+  const i = int.replace(/^0+(?=\d)/, "");
+  return (i ? groupIndian(i) : rest.length ? "0" : "") + frac;
 }

@@ -5,11 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { computeSplit, type Participant } from "@/lib/domain/friends";
 import { dateToTs, istDate } from "@/lib/domain/dates";
 import { findDuplicate } from "@/lib/domain/ledger";
-import { formatINR, parseAmount, round2 } from "@/lib/domain/money";
+import { envelopes } from "@/lib/domain/budgets";
+import { formatINR, groupTyping, parseAmount, round2 } from "@/lib/domain/money";
 import { merchantKey, parseQuickAdd } from "@/lib/domain/parser";
 import { parseBankSms } from "@/lib/domain/sms";
 import { addTransaction, autoFill, categoryByPath, categoryPath, defaultAccountFor, ensureFriends, getProfile, type SplitInput, updateTransaction } from "@/lib/store/actions";
-import { useData } from "@/lib/store/selectors";
+import { useCycle, useData, usePrevCycle, useToday } from "@/lib/store/selectors";
 import { uid } from "@/lib/store/store";
 import { storeReceipt } from "@/lib/receipts";
 import type { PayMethod, SplitMode, Transaction, TxnType } from "@/lib/types";
@@ -50,7 +51,8 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   const [mode, setMode] = useState<FormMode>(initial ? (initial.type === "transfer" ? "transfer" : initial.type === "income" ? "income" : initial.my_share !== null || initial.paid_by_friend_id ? "split" : "expense") : initialMode);
   const [nl, setNl] = useState(presetText ?? "");
   const [fromSms, setFromSms] = useState(false);
-  const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
+  const [amount, setAmountRaw] = useState(initial ? groupTyping(String(initial.amount)) : "");
+  const setAmount = (v: string) => setAmountRaw(groupTyping(v));
   const [date, setDate] = useState(initial ? istDate(initial.occurred_at) : istDate());
   const [time, setTime] = useState(() => {
     const d0 = initial ? new Date(initial.occurred_at) : new Date();
@@ -176,6 +178,10 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   }, [mode, split, amt]);
 
   const myShare = splitPreview.shares?.find((s) => s.id === ME)?.share;
+  const cycle = useCycle();
+  const prevCycle = usePrevCycle(cycle);
+  const todayStr = useToday();
+  const envs = useMemo(() => envelopes(d.budget_lines, d.categories, d.transactions, cycle, prevCycle, todayStr), [d.budget_lines, d.categories, d.transactions, cycle, prevCycle, todayStr]);
   const dup = !editing && amt > 0 && merchant ? findDuplicate({ id: txnId.current, amount: amt, merchant, occurred_at: dateToTs(date, time) }, d.transactions) : undefined;
 
   const showRupayAsk = !!rupayCard && mode !== "transfer" && mode !== "income" && method === "upi" && !(split.on && split.payer !== ME);
@@ -263,6 +269,10 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   const selParent = d.categories.find((c) => c.id === categoryId);
   const parentId = selParent?.parent_id ?? selParent?.id ?? null;
   const children = parentId ? d.categories.filter((c) => c.parent_id === parentId) : [];
+  const env = envs.find((e) => e.line.category_id === categoryId) ?? envs.find((e) => e.line.category_id === parentId);
+  // What this spend does to the category's envelope (editing: the old amount is already in "spent").
+  const impact = mode === "split" ? myShare ?? 0 : mode === "expense" ? amt : 0;
+  const envLeft = env ? env.budget - env.spent - (editing ? impact - (initial?.my_share ?? initial?.amount ?? 0) : impact) : null;
   const isCard = (id: string) => d.credit_cards.some((c) => c.account_id === id);
   const isRupay = (id: string) => d.credit_cards.some((c) => c.account_id === id && c.is_rupay_upi);
   // Accounts that make sense for the method: UPI can come from the bank or a RuPay card.
@@ -351,6 +361,12 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
               </button>
             )}
           </div>
+          {env && envLeft !== null && (mode === "expense" || mode === "split") && (
+            <p className={cn("mt-2 text-xs font-medium", envLeft < 0 ? "text-bad" : envLeft < env.budget * 0.2 ? "text-warn" : "text-muted")} aria-live="polite">
+              {env.category?.icon} {env.category?.name}: {amt > 0 ? "after this, " : ""}
+              {envLeft >= 0 ? `${formatINR(Math.round(envLeft))} left of ${formatINR(env.budget)}` : `${formatINR(Math.round(-envLeft))} over the ${formatINR(env.budget)} budget`}
+            </p>
+          )}
           {children.length > 0 && (
             <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 no-scrollbar">
               {children.map((c) => (
