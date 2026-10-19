@@ -135,3 +135,34 @@ test("Salary logged by hand counts as salary landing (no double income)", async 
   // Income is the one salary, not salary + expected salary.
   await expect(page.getByRole("link", { name: /^Income this cycle\s*85,000 rupees$/ })).toBeVisible();
 });
+
+test("Voice quick-add: speech becomes a parsed spend", async ({ page }) => {
+  // Headless browsers have no speech engine; stand in for one that hears a phrase.
+  await page.addInitScript(() => {
+    class FakeRecognition {
+      lang = "";
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      start() {
+        setTimeout(() => {
+          const r = Object.assign([{ transcript: "2 thousand rupees Myntra on card" }], { isFinal: true });
+          this.onresult?.({ results: [r] });
+          this.onend?.();
+        }, 50);
+      }
+      stop() {}
+    }
+    const w = window as unknown as { SpeechRecognition: unknown; webkitSpeechRecognition: unknown };
+    w.SpeechRecognition = FakeRecognition;
+    w.webkitSpeechRecognition = FakeRecognition;
+  });
+  await onboard(page);
+  await page.getByRole("button", { name: "Add transaction" }).first().click();
+  await page.getByRole("button", { name: "Say it" }).click();
+  await expect(page.getByLabel("Quick add")).toHaveValue("2000 myntra on card");
+  await expect(page.getByText("Shopping › Clothes").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Save ₹2,000/ })).toBeVisible();
+});

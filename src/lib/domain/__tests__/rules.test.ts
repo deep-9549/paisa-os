@@ -4,7 +4,7 @@ import { paceStatus, suggestBudget, typicalSpend } from "../budgets";
 import { billEffect, computeSplit, friendBalances, simplifyDebts, upiPayLink } from "../friends";
 import { goalReserve, plannedMonthly, roundUp } from "../goals";
 import { blockedAmount, listingGainPct, realisedPnl, releaseOnAllotment, taxEstimate } from "../ipo";
-import { parseQuickAdd } from "../parser";
+import { normalizeSpoken, parseQuickAdd } from "../parser";
 import { detectRecurring, expectedAmount, occurrences } from "../recurring";
 import { computeSafeToSpend } from "../safeToSpend";
 import { parseBankSms } from "../sms";
@@ -287,5 +287,19 @@ describe("budget suggestions", () => {
     expect(suggestBudget(4012)).toBe(4100);
     expect(suggestBudget(7210)).toBe(7500);
     expect(suggestBudget(0)).toBe(0);
+  });
+});
+
+describe("voice quick-add", () => {
+  it("normalises spoken amounts", () => {
+    expect(normalizeSpoken("450 rupees Swiggy on card")).toBe("450 swiggy on card");
+    expect(normalizeSpoken("2 thousand rent")).toBe("2000 rent");
+    expect(normalizeSpoken("1.5 lakh bonus income")).toBe("150000 bonus income");
+    expect(normalizeSpoken("₹1,200 dinner split Rahul")).toBe("1200 dinner split rahul");
+    expect(normalizeSpoken("two hundred auto cash")).toBe("200 auto cash");
+  });
+  it("feeds the normal parser", () => {
+    const p = parseQuickAdd(normalizeSpoken("Rs 80 chai yesterday"));
+    expect(p).toMatchObject({ amount: 80, daysAgo: 1, categoryPath: "Food › Tea & snacks" });
   });
 });

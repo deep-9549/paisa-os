@@ -1,13 +1,13 @@
 "use client";
 
-import { ChevronDown, ChevronUp, MapPin, Paperclip, Sparkles, Wand2 } from "lucide-react";
+import { ChevronDown, ChevronUp, MapPin, Mic, Paperclip, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { computeSplit, type Participant } from "@/lib/domain/friends";
 import { dateToTs, istDate } from "@/lib/domain/dates";
 import { findDuplicate } from "@/lib/domain/ledger";
 import { envelopes } from "@/lib/domain/budgets";
 import { formatINR, groupTyping, parseAmount, round2 } from "@/lib/domain/money";
-import { merchantKey, parseQuickAdd } from "@/lib/domain/parser";
+import { merchantKey, normalizeSpoken, parseQuickAdd } from "@/lib/domain/parser";
 import { parseBankSms } from "@/lib/domain/sms";
 import { addTransaction, autoFill, categoryByPath, categoryPath, defaultAccountFor, ensureFriends, getProfile, type SplitInput, updateTransaction } from "@/lib/store/actions";
 import { useCycle, useData, usePrevCycle, useToday } from "@/lib/store/selectors";
@@ -15,6 +15,7 @@ import { uid } from "@/lib/store/store";
 import { storeReceipt } from "@/lib/receipts";
 import type { PayMethod, SplitMode, Transaction, TxnType } from "@/lib/types";
 import { Avatar, Badge, Button, Chip, Field, Input, Segmented, Select, Toggle, cn } from "./ui";
+import { useVoice } from "./useVoice";
 
 export type FormMode = "expense" | "income" | "transfer" | "split";
 
@@ -74,6 +75,7 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   const [error, setError] = useState<string | null>(null);
   const [dupOk, setDupOk] = useState(false);
   const nlRef = useRef<HTMLInputElement>(null);
+  const voice = useVoice((text) => applyNl(normalizeSpoken(text)));
   const txnId = useRef(initial?.id ?? uid());
 
   useEffect(() => {
@@ -301,11 +303,24 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
               onKeyDown={(e) => e.key === "Enter" && save()}
               placeholder={mode === "split" ? "1200 dinner upi split rahul amit" : mode === "income" ? "80000 salary" : "450 swiggy card · or paste a bank SMS"}
               aria-label="Quick add"
-              className="h-13 pl-11 text-base"
+              className={cn("h-13 pl-11 text-base", voice.supported && "pr-12")}
               autoComplete="off"
               enterKeyHint="done"
             />
+            {voice.supported && (
+              <button
+                type="button"
+                onClick={() => (voice.listening ? voice.stop() : voice.start())}
+                className={cn("absolute right-1.5 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-xl transition", voice.listening ? "animate-pulse bg-bad text-white" : "text-muted hover:bg-surface-3 hover:text-ink")}
+                aria-label={voice.listening ? "Stop listening" : "Say it"}
+                aria-pressed={voice.listening}
+              >
+                <Mic size={18} aria-hidden />
+              </button>
+            )}
           </div>
+          {voice.listening && <p className="mt-2 text-xs font-medium text-bad">Listening… say “450 Swiggy on card” · uses your browser’s speech service</p>}
+          {voice.error && <p className="mt-2 text-xs text-warn">{voice.error}</p>}
           {preview}
           {templates.length > 0 && !nl && (
             <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 no-scrollbar">
