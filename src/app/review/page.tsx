@@ -2,7 +2,7 @@
 
 import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { useMemo, useState } from "react";
-import { CloseDaySheet } from "@/components/Habit";
+import { ChallengeCard, CloseDaySheet } from "@/components/Habit";
 import { Amount, Button, Card, PageHeader, SectionTitle, cn } from "@/components/ui";
 import { addDays, fmtDate, parseDate, toDateStr } from "@/lib/domain/dates";
 import { badges, nextMilestone, noSpendDays, trackedDays, weekOf, weekReview } from "@/lib/domain/habits";
@@ -52,6 +52,9 @@ export default function ReviewPage() {
           </Button>
         )}
       </section>
+
+      <SectionTitle>This week&apos;s challenge</SectionTitle>
+      <ChallengeCard />
 
       <SectionTitle>Habit calendar</SectionTitle>
       <Card>

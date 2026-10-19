@@ -232,3 +232,49 @@ export function frequentSpends(txns: Transaction[], today: DateStr, n = 6): Freq
     .slice(0, n)
     .map(({ last, count }) => ({ merchant: last.merchant!, amount: last.amount, method: last.method, category_id: last.category_id, count }));
 }
+
+export interface Challenge {
+  id: string;
+  title: string;
+  body: string;
+  have: number;
+  need: number;
+  /** Lower-is-better challenges (spend caps): on track while have ≤ need, done once the week ends that way. */
+  cap: boolean;
+  onTrack: boolean;
+  done: boolean;
+}
+
+/**
+ * One small challenge per week, rotating by week so it stays fresh. Caps are
+ * based on last week's numbers so they're always within reach.
+ */
+export function weeklyChallenge(txns: Transaction[], logs: DayLog[], categories: Category[], today: DateStr): Challenge {
+  const wk = weekOf(today);
+  const live = txns.filter(isLive);
+  const weekNo = Math.floor(diffDays(wk.start, "2024-01-01") / 7);
+  const last = weekReview(txns, logs, categories, addDays(wk.start, -7), addDays(wk.start, -1));
+  const options: Challenge[] = [];
+
+  const ns = noSpendDays(live, wk.start, wk.end, today).length;
+  options.push({ id: "nospend2", title: "Two no-spend days", body: "Pick two days this week to spend nothing at all.", have: ns, need: 2, cap: false, onTrack: true, done: ns >= 2 });
+
+  const closed = logs.filter((l) => l.date >= wk.start && l.date <= wk.end).length;
+  options.push({ id: "close7", title: "Close every day", body: "Do the 10-second evening check-in all seven days.", have: closed, need: 7, cap: false, onTrack: closed >= diffDays(today, wk.start), done: closed >= 7 });
+
+  if (last.topCategory && last.topCategory.amount >= 500 && last.topCategory.category) {
+    const c = last.topCategory.category;
+    const capAmt = Math.round((last.topCategory.amount * 0.8) / 50) * 50;
+    const ids = new Set([c.id, ...categories.filter((x) => x.parent_id === c.id).map((x) => x.id)]);
+    const spent = round2(live.filter((t) => t.category_id && ids.has(t.category_id) && txnDate(t) >= wk.start && txnDate(t) <= wk.end).reduce((a, t) => a + budgetImpact(t), 0));
+    options.push({ id: `cat-${c.id}`, title: `${c.icon} ${c.name} under ₹${capAmt.toLocaleString("en-IN")}`, body: `20% less than last week's ₹${Math.round(last.topCategory.amount).toLocaleString("en-IN")}.`, have: spent, need: capAmt, cap: true, onTrack: spent <= capAmt, done: spent <= capAmt && today >= wk.end });
+  }
+
+  if (last.spent > 0) {
+    const spent = spendInRange(live, wk.start, wk.end);
+    const capAmt = Math.round(last.spent);
+    options.push({ id: "lessthanlast", title: "Beat last week", body: `Spend less than last week's ₹${capAmt.toLocaleString("en-IN")}.`, have: spent, need: capAmt, cap: true, onTrack: spent < capAmt, done: spent < capAmt && today >= wk.end });
+  }
+
+  return options[((weekNo % options.length) + options.length) % options.length];
+}

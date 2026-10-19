@@ -3,7 +3,7 @@
 import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
+import { ChallengeCard, CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
 import { GettingStarted } from "@/components/GettingStarted";
 import { SpottedCard, useSpotted } from "@/components/Spotted";
 import { TxnDetailSheet } from "@/components/TxnDetail";
@@ -236,6 +236,9 @@ export default function Home() {
       <SectionTitle action={<Link href="/review">Weekly review</Link>}>This week</SectionTitle>
       <Card>
         <WeekStrip allowance={sts.dailyAllowance} />
+        <div className="mt-4 border-t border-line pt-3">
+          <ChallengeCard compact />
+        </div>
       </Card>
 
       {/* Coming up */}

@@ -1,10 +1,10 @@
 "use client";
 
-import { Check, Flame, Moon } from "lucide-react";
+import { Check, Flame, Moon, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { fmtDate, istDate, weekdayName } from "@/lib/domain/dates";
-import { dailySeries, dayVerdict, nextMilestone, streakInfo, trackedDays, weekOf } from "@/lib/domain/habits";
+import { dailySeries, dayVerdict, nextMilestone, streakInfo, trackedDays, weekOf, weeklyChallenge } from "@/lib/domain/habits";
 import { isLive, spendInRange, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
 import { closeDay, reopenDay } from "@/lib/store/actions";
@@ -58,12 +58,13 @@ export function WeekStrip({ allowance }: { allowance: number }) {
             <Link key={p.date} href={`/activity?day=${p.date}`} className="group relative flex h-full flex-1 flex-col items-center justify-end">
               {!p.future && p.spent === 0 && p.date < today && p.date >= since ? (
                 <span className="mb-1 text-[10px] font-semibold text-good">₹0</span>
+              ) : p.closed ? (
+                <Check size={12} className="mb-0.5 text-good" aria-label="closed" />
               ) : null}
               <div
                 className={cn("w-full rounded-lg transition-all", p.future ? "bg-surface-2" : over ? "bg-bad/80" : isToday ? "bg-accent" : "bg-accent/45")}
                 style={{ height: p.future ? "8%" : `${h}%`, minHeight: p.future ? 6 : undefined }}
               />
-              {p.closed && <Check size={12} className="absolute -top-1 text-good" aria-label="closed" />}
             </Link>
           );
         })}
@@ -222,5 +223,34 @@ export function CloseDaySheet({ open, onClose, date: dateProp }: { open: boolean
         </div>
       )}
     </Sheet>
+  );
+}
+
+/** This week's challenge with progress; compact on Home, full on Progress. */
+export function ChallengeCard({ compact }: { compact?: boolean }) {
+  const d = useData();
+  const today = useToday();
+  const c = useMemo(() => weeklyChallenge(d.transactions, d.day_logs, d.categories, today), [d.transactions, d.day_logs, d.categories, today]);
+  const pct = c.cap ? Math.min(c.have / Math.max(c.need, 1), 1) : Math.min(c.have / c.need, 1);
+  const status = c.cap
+    ? c.onTrack ? `${formatINR(Math.round(c.need - c.have))} to spare` : `${formatINR(Math.round(c.have - c.need))} over`
+    : `${Math.min(c.have, c.need)}/${c.need}`;
+  return (
+    <div className={cn("flex items-center gap-3", !compact && "rounded-3xl border border-line bg-surface p-4 shadow-card")}>
+      <span className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl", c.done ? "bg-good/15 text-good" : "bg-warn/15 text-warn")}>
+        {c.done ? <Check size={20} aria-hidden /> : <Trophy size={20} aria-hidden />}
+      </span>
+      <div className="min-w-0 flex-1">
+        {compact && <p className="text-[11px] font-medium text-muted">Weekly challenge</p>}
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="truncate text-sm font-semibold">{c.title}</p>
+          <span className={cn("shrink-0 text-xs font-semibold tabular", c.done || (c.cap && c.onTrack) ? "text-good" : c.cap ? "text-bad" : "text-muted")}>{status}</span>
+        </div>
+        {!compact && <p className="text-xs text-muted">{c.body}</p>}
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-surface-3">
+          <div className={cn("h-full rounded-full transition-all", c.cap ? (c.onTrack ? "bg-good" : "bg-bad") : c.done ? "bg-good" : "bg-warn")} style={{ width: `${pct * 100}%` }} />
+        </div>
+      </div>
+    </div>
   );
 }

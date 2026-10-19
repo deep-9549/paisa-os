@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { badges, dailySeries, dayVerdict, noSpendDays, streakInfo, trackedDays, weekOf, weekReview } from "../habits";
+import { badges, dailySeries, dayVerdict, noSpendDays, streakInfo, trackedDays, weekOf, weekReview, weeklyChallenge } from "../habits";
 import type { DayLog } from "../../types";
 import { txn } from "./fixtures";
 
@@ -72,5 +72,27 @@ describe("habits", () => {
     expect(dayVerdict(0, 500).tone).toBe("good");
     expect(dayVerdict(600, 500).tone).toBe("warn");
     expect(dayVerdict(2000, 500).tone).toBe("bad");
+  });
+});
+
+describe("weekly challenge", () => {
+  it("is stable within a week and reachable", () => {
+    const txns = [txn({ date: "2026-10-13", amount: 1000 }), txn({ date: "2026-10-20", amount: 100 })];
+    const a = weeklyChallenge(txns, [], [], "2026-10-20");
+    const b = weeklyChallenge(txns, [], [], "2026-10-22");
+    expect(a.id).toBe(b.id);
+    expect(a.need).toBeGreaterThan(0);
+  });
+  it("caps are measured against this week's spend", () => {
+    const txns = [txn({ date: "2026-10-13", amount: 1000 }), txn({ date: "2026-10-20", amount: 100 })];
+    // Try every rotation by moving across weeks with the same relative data.
+    const seen = new Set<string>();
+    for (let w = 0; w < 6; w++) {
+      const shift = (d: string) => new Date(Date.parse(`${d}T00:00:00Z`) + w * 7 * 864e5).toISOString().slice(0, 10);
+      const c = weeklyChallenge(txns.map((t) => ({ ...t, occurred_at: `${shift(t.occurred_at.slice(0, 10))}T06:30:00.000Z` })), [], [], shift("2026-10-20"));
+      seen.add(c.id);
+      if (c.id === "lessthanlast") expect(c).toMatchObject({ have: 100, need: 1000, onTrack: true, done: false });
+    }
+    expect(seen.size).toBeGreaterThan(1);
   });
 });
