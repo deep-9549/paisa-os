@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown, ChevronUp, MapPin, Paperclip, Sparkles, Wand2 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { computeSplit, type Participant } from "@/lib/domain/friends";
 import { dateToTs, istDate } from "@/lib/domain/dates";
@@ -67,6 +68,7 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   const [location, setLocation] = useState<string | null>(initial?.location ?? null);
   const [split, setSplit] = useState<SplitState>(() => (initial ? splitFromTxn(initial, d.transaction_splits) : { ...emptySplit(), on: initialMode === "split" }));
   const [details, setDetails] = useState(editing);
+  const [showAllCats, setShowAllCats] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dupOk, setDupOk] = useState(false);
   const nlRef = useRef<HTMLInputElement>(null);
@@ -85,8 +87,14 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   const catOptions = useMemo(() => {
     const kind = isIncome ? "income" : "expense";
     const parents = d.categories.filter((c) => !c.parent_id && c.kind === kind);
-    return parents.map((p) => ({ parent: p, children: d.categories.filter((c) => c.parent_id === p.id) }));
-  }, [d.categories, isIncome]);
+    // Most-used categories first so the common ones are one tap away.
+    const use = new Map<string, number>();
+    const parentOf = new Map(d.categories.map((c) => [c.id, c.parent_id ?? c.id]));
+    for (const t of d.transactions.slice(-400)) if (t.category_id) use.set(parentOf.get(t.category_id) ?? "", (use.get(parentOf.get(t.category_id) ?? "") ?? 0) + 1);
+    return parents
+      .map((p) => ({ parent: p, children: d.categories.filter((c) => c.parent_id === p.id) }))
+      .sort((a, b) => (use.get(b.parent.id) ?? 0) - (use.get(a.parent.id) ?? 0));
+  }, [d.categories, d.transactions, isIncome]);
 
   function pickAccountFor(m: PayMethod, merch: string | null, forceCard: boolean) {
     const mem = merch ? autoFill(merch, d) : null;
@@ -239,7 +247,8 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
 
   const templates = d.templates;
   const preview = amt > 0 && (
-    <p className="mt-2 text-sm text-muted" aria-live="polite">
+    <p className="mt-2 text-sm leading-relaxed text-muted" aria-live="polite">
+      <Sparkles size={14} className="mr-1 inline align-[-2px] text-accent" aria-hidden />
       <span className="font-semibold text-ink">{formatINR(amt)}</span>
       {mode !== "transfer" && <> · {categoryPath(categoryId || null, d.categories)}</>}
       {" · "}
@@ -249,6 +258,23 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
       {fromSms && <> · <Badge tone="info">from SMS</Badge></>}
     </p>
   );
+  const yesterday = istDate(new Date(Date.now() - 86_400_000));
+  const today = istDate();
+  const selParent = d.categories.find((c) => c.id === categoryId);
+  const parentId = selParent?.parent_id ?? selParent?.id ?? null;
+  const children = parentId ? d.categories.filter((c) => c.parent_id === parentId) : [];
+  const isCard = (id: string) => d.credit_cards.some((c) => c.account_id === id);
+  const isRupay = (id: string) => d.credit_cards.some((c) => c.account_id === id && c.is_rupay_upi);
+  // Accounts that make sense for the method: UPI can come from the bank or a RuPay card.
+  const accountChoices = accounts.filter((a) => {
+    if (a.type === "demat" || a.type === "loan") return false;
+    if (mode === "income") return a.type !== "credit_card";
+    if (method === "card") return isCard(a.id);
+    if (method === "cash") return a.type === "cash";
+    if (method === "upi") return a.type === "savings" || a.type === "wallet" || isRupay(a.id);
+    if (method === "netbanking" || method === "auto_debit") return a.type === "savings" || isCard(a.id);
+    return true;
+  });
 
   return (
     <div>
@@ -256,19 +282,23 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
 
       {!editing && (
         <div className="mt-3">
-          <Input
-            ref={nlRef}
-            value={nl}
-            onChange={(e) => applyNl(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && save()}
-            placeholder={mode === "split" ? "1200 dinner upi split rahul amit" : mode === "income" ? "80000 salary" : "450 swiggy card · or paste a bank SMS"}
-            aria-label="Quick add"
-            className="h-12 text-base"
-            autoComplete="off"
-          />
+          <div className="relative">
+            <Wand2 size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-accent" aria-hidden />
+            <Input
+              ref={nlRef}
+              value={nl}
+              onChange={(e) => applyNl(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && save()}
+              placeholder={mode === "split" ? "1200 dinner upi split rahul amit" : mode === "income" ? "80000 salary" : "450 swiggy card · or paste a bank SMS"}
+              aria-label="Quick add"
+              className="h-13 pl-11 text-base"
+              autoComplete="off"
+              enterKeyHint="done"
+            />
+          </div>
           {preview}
           {templates.length > 0 && !nl && (
-            <div className="mt-3 flex gap-2 overflow-x-auto no-scrollbar">
+            <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 no-scrollbar">
               {templates.map((t) => (
                 <Chip key={t.id} onClick={() => applyNl(t.text)}>
                   {t.emoji} {t.label}
@@ -279,39 +309,99 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
         </div>
       )}
 
-      {showRupayAsk && (
-        <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
-          <p className="mb-2 text-xs text-muted">{rememberedAccount ? "Paid from (remembered for this merchant)" : "Bank or RuPay? I'll remember for this merchant."}</p>
-          <Segmented
-            size="sm"
-            value={accountId === rupayCard!.account_id ? "card" : "bank"}
-            options={[{ value: "bank", label: defaultAccountFor("upi", d)?.name ?? "Bank" }, { value: "card", label: accounts.find((a) => a.id === rupayCard!.account_id)?.name ?? "RuPay card" }]}
-            onChange={(v) => setAccountId(v === "card" ? rupayCard!.account_id : defaultAccountFor("upi", d)?.id ?? "")}
-          />
+      {/* Amount */}
+      <label className="mt-4 flex items-center justify-center gap-1 rounded-3xl bg-surface-2 px-4 py-3">
+        <span className={cn("text-3xl font-semibold", amt > 0 ? "text-ink" : "text-muted/60")}>₹</span>
+        <input
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="0"
+          aria-label="Amount in rupees"
+          className="display w-full min-w-0 bg-transparent text-center text-[44px] leading-tight outline-none placeholder:text-muted/40"
+          style={{ maxWidth: `${Math.max(amount.length, 1) + 1.5}ch` }}
+        />
+      </label>
+
+      {/* Category */}
+      {mode !== "transfer" && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-muted">Category</p>
+          <div className="grid grid-cols-4 gap-2">
+            {(showAllCats ? catOptions : catOptions.slice(0, 7)).map(({ parent }) => {
+              const on = parentId === parent.id;
+              return (
+                <button
+                  key={parent.id}
+                  type="button"
+                  onClick={() => setCategoryId(on && categoryId === parent.id ? "" : parent.id)}
+                  aria-pressed={on}
+                  className={cn("flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl border px-1 py-2 text-[11px] font-medium leading-tight transition active:scale-95", on ? "border-transparent text-ink" : "border-line text-muted")}
+                  style={on ? { background: `color-mix(in srgb, ${parent.color} 22%, transparent)`, boxShadow: `inset 0 0 0 1.5px ${parent.color}` } : undefined}
+                >
+                  <span className="text-xl" aria-hidden>{parent.icon}</span>
+                  <span className="line-clamp-1">{parent.name}</span>
+                </button>
+              );
+            })}
+            {catOptions.length > 7 && (
+              <button type="button" onClick={() => setShowAllCats(!showAllCats)} className="flex min-h-[68px] flex-col items-center justify-center gap-1 rounded-2xl border border-dashed border-line text-[11px] font-medium text-muted">
+                <span className="text-xl" aria-hidden>{showAllCats ? "−" : "⋯"}</span>
+                {showAllCats ? "Less" : "More"}
+              </button>
+            )}
+          </div>
+          {children.length > 0 && (
+            <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 no-scrollbar">
+              {children.map((c) => (
+                <Chip key={c.id} active={categoryId === c.id} onClick={() => setCategoryId(categoryId === c.id ? parentId! : c.id)}>
+                  {c.icon} {c.name}
+                </Chip>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-x-3">
-        <Field label="Amount (₹)">
-          <Input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" aria-label="Amount in rupees" />
-        </Field>
-        {mode !== "transfer" ? (
-          <Field label="Category">
-            <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} aria-label="Category">
-              <option value="">Uncategorised</option>
-              {catOptions.map(({ parent, children }) => (
-                <optgroup key={parent.id} label={`${parent.icon} ${parent.name}`}>
-                  <option value={parent.id}>{parent.name}</option>
-                  {children.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {parent.name} › {c.name}
-                    </option>
-                  ))}
-                </optgroup>
+      {/* How & where */}
+      {mode !== "transfer" && !(mode === "split" && split.payer !== ME) && (
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-medium text-muted">Paid with</p>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 no-scrollbar">
+            {METHODS.filter((m) => mode !== "income" || m.value !== "card").map((m) => (
+              <Chip key={m.value} active={method === m.value} onClick={() => { setMethod(m.value); setAccountId(pickAccountFor(m.value, merchant || null, false)); }}>
+                {m.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+      )}
+      {mode !== "transfer" && !(mode === "split" && split.payer !== ME) && (accountChoices.length > 1 || !accountChoices.some((a) => a.id === accountId)) && (
+        <div className="mt-3">
+          <p className="mb-2 text-xs font-medium text-muted">
+            {mode === "income" ? "Into" : "From"}
+            {showRupayAsk && (rememberedAccount ? " · remembered for this merchant" : " · bank or RuPay? I'll remember per merchant")}
+          </p>
+          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 no-scrollbar" aria-label={mode === "income" ? "Into account" : "Paid from"}>
+            {(accountChoices.length ? accountChoices : accounts).map((a) => (
+              <Chip key={a.id} active={accountId === a.id} onClick={() => setAccountId(a.id)}>
+                {a.icon} {a.name}
+              </Chip>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {mode === "transfer" && (
+        <div className="mt-4 grid grid-cols-2 gap-x-3">
+          <Field label="From account">
+            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+              <option value="">Choose…</option>
+              {accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
               ))}
             </Select>
           </Field>
-        ) : (
           <Field label="To account">
             <Select value={toAccountId} onChange={(e) => setToAccountId(e.target.value)}>
               <option value="">Choose…</option>
@@ -320,60 +410,68 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
               ))}
             </Select>
           </Field>
-        )}
-        {!(mode === "split" && split.payer !== ME) && (
-          <Field label={mode === "transfer" ? "From account" : mode === "income" ? "Into account" : "Paid from"}>
-            <Select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              <option value="">Choose…</option>
-              {accounts.filter((a) => mode !== "income" || a.type !== "credit_card").map((a) => (
-                <option key={a.id} value={a.id}>{a.icon} {a.name}</option>
-              ))}
-            </Select>
-          </Field>
-        )}
-        <Field label="Method">
-          <Select
-            value={method}
-            onChange={(e) => {
-              const m = e.target.value as PayMethod;
-              setMethod(m);
-              if (mode !== "transfer") setAccountId(pickAccountFor(m, merchant || null, false));
-            }}
-          >
-            {METHODS.map((m) => (
-              <option key={m.value} value={m.value}>{m.label}</option>
-            ))}
-          </Select>
+        </div>
+      )}
+
+      <div className="mt-4 grid grid-cols-2 gap-x-3">
+        <Field label={mode === "income" ? "From" : "Merchant / payee"}>
+          <Input value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder={mode === "income" ? "Employer" : "Swiggy"} />
         </Field>
-        <Field label="Merchant / payee">
-          <Input value={merchant} onChange={(e) => setMerchant(e.target.value)} placeholder="Swiggy" />
-        </Field>
-        <Field label="Date">
-          <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={istDate()} />
+        <Field label="When">
+          <div className="flex gap-1.5">
+            <Chip active={date === today} onClick={() => setDate(today)}>Today</Chip>
+            <Chip active={date === yesterday} onClick={() => setDate(yesterday)}>Yday</Chip>
+          </div>
         </Field>
       </div>
+      {date !== today && date !== yesterday && <p className="-mt-2 mb-2 text-xs text-muted">On {date}</p>}
 
       {mode === "split" && <SplitEditor split={split} setSplit={setSplit} amount={amt} shares={splitPreview.shares} err={splitPreview.err} nameOf={nameOf} />}
 
-      <button type="button" className="mb-2 mt-1 min-h-11 text-sm text-accent" onClick={() => setDetails(!details)}>
-        {details ? "− Fewer details" : "+ More details (note, tags, receipt…)"}
+      <button type="button" className="mb-2 mt-1 flex min-h-11 items-center gap-1 text-sm font-medium text-accent" onClick={() => setDetails(!details)}>
+        {details ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {details ? "Fewer details" : "Date, time, note, tags, receipt"}
       </button>
       {details && (
         <div className="grid grid-cols-2 gap-x-3">
+          <Field label="Date">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} max={istDate()} />
+          </Field>
           <Field label="Time">
             <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          </Field>
-          <Field label="Tags (comma separated)">
-            <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="trip, office" />
           </Field>
           <div className="col-span-2">
             <Field label="Note">
               <Input value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
           </div>
+          <div className="col-span-2">
+            <Field label="Tags (comma separated)">
+              <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="trip, office" />
+            </Field>
+          </div>
+          {mode !== "transfer" && (
+            <div className="col-span-2">
+              <Field label="Exact category">
+                <Select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} aria-label="Category">
+                  <option value="">Uncategorised</option>
+                  {catOptions.map(({ parent, children }) => (
+                    <optgroup key={parent.id} label={`${parent.icon} ${parent.name}`}>
+                      <option value={parent.id}>{parent.name}</option>
+                      {children.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {parent.name} › {c.name}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </Select>
+              </Field>
+            </div>
+          )}
           <div className="col-span-2 flex flex-wrap items-center gap-2">
             <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 text-sm">
-              📎 {receipt ? "Replace receipt" : "Attach receipt"}
+              <Paperclip size={15} aria-hidden /> {receipt ? "Replace receipt" : "Attach receipt"}
               <input
                 type="file"
                 accept="image/*"
@@ -393,7 +491,7 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
                 navigator.geolocation?.getCurrentPosition((pos) => setLocation(`${pos.coords.latitude.toFixed(5)},${pos.coords.longitude.toFixed(5)}`))
               }
             >
-              📍 {location ? "Location added" : "Add location"}
+              <MapPin size={15} aria-hidden /> {location ? "Location added" : "Add location"}
             </Button>
           </div>
           <div className="col-span-2">
@@ -403,7 +501,7 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
       )}
 
       {error === "dup" && dup ? (
-        <div className="mt-2 rounded-xl border border-warn/40 bg-warn/10 p-3 text-sm">
+        <div className="mt-2 rounded-2xl border border-warn/40 bg-warn/10 p-3 text-sm">
           Looks like a duplicate of {formatINR(dup.amount)} · {dup.merchant} logged {new Date(dup.occurred_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}.
           <div className="mt-2 flex gap-2">
             <Button size="sm" onClick={() => { setDupOk(true); setError(null); }}>Save anyway</Button>
@@ -414,10 +512,12 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
         error && <p className="mt-2 text-sm text-bad" role="alert">{error}</p>
       )}
 
-      <Button variant="primary" size="lg" className="mt-4 w-full" onClick={save} disabled={amt <= 0}>
-        {editing ? "Save changes" : `Save${amt > 0 ? ` ${formatINR(amt)}` : ""}`}
-      </Button>
-      {profile.onboarded && !editing && <p className="mt-2 text-center text-[11px] text-muted">Tip: “paid by rahul”, “split amit neha”, “yesterday”, “#tag”, “rupay”</p>}
+      <div className="sticky bottom-0 z-10 -mx-4 mt-3 border-t border-line bg-surface px-4 pb-2 pt-3">
+        <Button variant="primary" size="lg" className="w-full disabled:bg-surface-3 disabled:text-muted disabled:opacity-100 disabled:shadow-none" onClick={save} disabled={amt <= 0}>
+          {editing ? "Save changes" : amt > 0 ? `Save ${formatINR(amt)}` : "Enter an amount"}
+        </Button>
+      </div>
+      {profile.onboarded && !editing && <p className="mt-1 text-center text-[11px] text-muted">Try “paid by rahul”, “split amit neha”, “yesterday”, “#tag”, “rupay”</p>}
     </div>
   );
 }

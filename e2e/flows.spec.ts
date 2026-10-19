@@ -108,3 +108,17 @@ test("F4/F7: demo data renders every main screen", async ({ page }) => {
     await page.screenshot({ path: `e2e/screenshots/${path.slice(1).replace(/\//g, "-")}.png`, fullPage: true });
   }
 });
+
+test("Habit: close the day and see the streak", async ({ page }) => {
+  await onboard(page);
+  await quickAdd(page, "60 chai upi");
+  await page.getByRole("button", { name: /^Save ₹60/ }).click();
+  await page.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: /Calm/ }).click();
+  await page.getByRole("button", { name: "Close the day" }).click();
+  await expect(page.getByText("1-day streak", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Today is closed")).toBeVisible();
+  await reload(page, "/review");
+  await expect(page.getByText("current streak · best 1")).toBeVisible();
+});
