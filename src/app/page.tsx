@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
+import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, HardDriveDownload, Info, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { ChallengeCard, CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
@@ -11,7 +11,8 @@ import { TxnRow } from "@/components/TxnRow";
 import { Amount, Avatar, Button, Card, Empty, IconButton, Progress, SectionTitle, Sheet, cn } from "@/components/ui";
 import { envelopes } from "@/lib/domain/budgets";
 import { recentCycles } from "@/lib/domain/cycle";
-import { addDays, diffDays, fmtDate, relativeDay } from "@/lib/domain/dates";
+import { backupNow, lastBackupAt } from "@/lib/data";
+import { addDays, diffDays, fmtDate, istDate, relativeDay } from "@/lib/domain/dates";
 import { anomalies, forecastMonthEnd } from "@/lib/domain/insights";
 import { isLive, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
@@ -37,6 +38,11 @@ export default function Home() {
   const [breakdown, setBreakdown] = useState(false);
   const [closing, setClosing] = useState(false);
   const [spotted, dismissSpotted] = useSpotted();
+  const userId = useStore((s) => s.userId);
+  const [lastBackup, setLastBackup] = useState<string | null>(null);
+  useEffect(() => setLastBackup(lastBackupAt()), []);
+  // Local-only data with no backup in 30 days (and enough to lose) gets a nudge.
+  const needsBackup = !userId && d.transactions.length >= 20 && (!lastBackup || diffDays(today, istDate(lastBackup)) >= 30);
   // Deep link from the evening notification: /?close=1
   useEffect(() => {
     if (new URLSearchParams(location.search).get("close") === "1") {
@@ -186,7 +192,7 @@ export default function Home() {
       )}
 
       {/* For you: things that need a tap */}
-      {(sts.expectedSalary > 0 || drafts.length > 0 || insights.length > 0 || (isLastDays && sts.month > 0 && d.goals.some((g) => !g.archived))) && (
+      {(sts.expectedSalary > 0 || needsBackup || drafts.length > 0 || insights.length > 0 || (isLastDays && sts.month > 0 && d.goals.some((g) => !g.archived))) && (
         <div className="mt-3 space-y-2">
           {sts.expectedSalary > 0 && (
             <Nudge
@@ -196,6 +202,11 @@ export default function Home() {
               body={sts.cappedByCash ? `Until it is, Safe-to-Spend only uses the cash you actually have (${formatINR(Math.round(sts.trueCash))}).` : "Mark it when it lands so the numbers use real income."}
             >
               <Button size="sm" onClick={() => setQuickAdd({ open: true, text: `${sts.expectedSalary} salary` })}>Arrived</Button>
+            </Nudge>
+          )}
+          {needsBackup && (
+            <Nudge icon={<HardDriveDownload size={18} />} tone="warn" title="Back up your data" body={`Everything lives only in this browser${lastBackup ? `; last backup ${fmtDate(istDate(lastBackup))}` : ""}. Save a copy in case you clear it or lose the phone.`}>
+              <Button size="sm" onClick={() => { backupNow(today); setLastBackup(new Date().toISOString()); }}>Save backup</Button>
             </Nudge>
           )}
           {drafts.length > 0 && (

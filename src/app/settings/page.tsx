@@ -6,7 +6,7 @@ import { Amount, Badge, Button, Card, Field, Input, PageHeader, Row, SectionTitl
 import { describeSetting, getCycle, ordinal } from "@/lib/domain/cycle";
 import { istDate } from "@/lib/domain/dates";
 import { formatINR, parseAmount } from "@/lib/domain/money";
-import { type CsvMapping, type CsvPreviewRow, commitCsv, deleteAll, download, exportJson, guessMapping, importJson, parseCsv, previewCsv, transactionsCsv } from "@/lib/data";
+import { type CsvMapping, type CsvPreviewRow, backupNow, commitCsv, deleteAll, download, guessMapping, lastBackupAt, importJson, parseCsv, previewCsv, transactionsCsv } from "@/lib/data";
 import {
   categoryPath, deleteCategory, deleteRuleEngine, deleteTemplate, deleteUpiHandle, getProfile, iconFor, newAccount, reconcileAccount,
   saveAccount, saveCategory, saveRuleEngine, saveTemplate, saveUpiHandle, setCycleSetting, updateProfile,
@@ -108,7 +108,7 @@ export default function SettingsPage() {
       <SectionTitle>Data</SectionTitle>
       <Card className="p-1">
         <Row onClick={() => download(`paisa-os-transactions-${istDate()}.csv`, transactionsCsv(), "text/csv")} left="📄" title="Export transactions (CSV)" />
-        <Row onClick={() => download(`paisa-os-backup-${istDate()}.json`, exportJson(), "application/json")} left="💾" title="Full backup (JSON)" />
+        <Row onClick={() => backupNow(istDate())} left="💾" title="Full backup (JSON)" sub={lastBackupAt() ? `Last saved ${new Date(lastBackupAt()!).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : "Never saved on this device"} />
         <Row onClick={() => setSheet("import")} left="📥" title="Restore from JSON backup" />
         <Row onClick={() => setSheet("csv")} left="🏦" title="Import bank / card statement CSV" sub="Column mapping + duplicate check" />
         <Row href="/tax" left="🧾" title="Tax helper" sub="Rent for HRA, IPO capital gains, 80C" />

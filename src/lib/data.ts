@@ -58,6 +58,27 @@ export function transactionsCsv(d: Tables = getData()): string {
   );
 }
 
+const BACKUP_KEY = "paisa:last-backup";
+
+/** When this device last saved a full backup (ISO), if ever. */
+export function lastBackupAt(): string | null {
+  try {
+    return localStorage.getItem(BACKUP_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Download a full JSON backup and remember when, for the backup reminder. */
+export function backupNow(today: string) {
+  download(`paisa-os-backup-${today}.json`, exportJson(), "application/json");
+  try {
+    localStorage.setItem(BACKUP_KEY, new Date().toISOString());
+  } catch {
+    /* private mode: the reminder may show again */
+  }
+}
+
 export function exportJson(d: Tables = getData()): string {
   return JSON.stringify({ app: "paisa-os", version: 1, exported_at: new Date().toISOString(), data: d }, null, 2);
 }
