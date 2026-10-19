@@ -153,7 +153,7 @@ function NotificationSettings() {
           <Button size="sm" onClick={async () => { const r = await Notification.requestPermission(); setPerm(r); if (r === "granted") subscribePush(); }}>Enable</Button>
         )}
       </div>
-      <Toggle checked={p.notify_daily_nudge} onChange={(v) => updateProfile({ notify_daily_nudge: v })} label="Daily 9 PM “log today's spends?” nudge" />
+      <Toggle checked={p.notify_daily_nudge} onChange={(v) => updateProfile({ notify_daily_nudge: v })} label="Daily reminders: morning brief + 9 PM close-the-day" />
       <Toggle checked={p.notify_weekly} onChange={(v) => updateProfile({ notify_weekly: v })} label="Weekly summary on Sunday" />
       <Toggle checked={p.email_digest} onChange={(v) => updateProfile({ email_digest: v })} label="Email digest (needs Supabase + Resend)" />
       <Field label="Remind me of friend balances older than (days)"><Input inputMode="numeric" defaultValue={p.friend_reminder_days} onBlur={(e) => updateProfile({ friend_reminder_days: parseInt(e.target.value) || 14 })} /></Field>

@@ -8,13 +8,14 @@ import { envelopes } from "../domain/budgets";
 import { getCycle, previousCycle } from "../domain/cycle";
 import { addDays, diffDays, fmtDate, istDate, istParts } from "../domain/dates";
 import { balanceSince } from "../domain/friends";
+import { streakInfo, trackedDays } from "../domain/habits";
 import { netWorth } from "../domain/insights";
 import { ipoReminders } from "../domain/ipo";
 import { isLive, spendInRange, txnDate } from "../domain/ledger";
 import { formatINR } from "../domain/money";
 import { dueToPost, occurrencesInRange, periodDays } from "../domain/recurring";
 import type { AppNotification, Tables } from "../types";
-import { getProfile, occurrenceTxn, postEmiCharges, purgeTrash, up } from "./actions";
+import { del, getProfile, occurrenceTxn, postEmiCharges, purgeTrash, up } from "./actions";
 import { cardSummaries, salaryDates, safeToSpendFor } from "./selectors";
 import { type Change, getData, nowIso, uid, useStore } from "./store";
 
@@ -97,9 +98,22 @@ export function runJobs(now = new Date()) {
     push(notif(`bill-${o.rule.id}-${o.date}-${n}`, "bill", n === 0 ? `${o.rule.name} due today` : `${o.rule.name} due ${n === 1 ? "tomorrow" : `in ${n} days`}`, `${formatINR(o.amount)} · ${fmtDate(o.date)}.`, "/plan/recurring"));
   }
   for (const r of ipoReminders(d.ipo_applications, today, addDays(today, 1))) push(notif(r.id, "ipo", r.title, r.body, "/invest"));
-  if (p.notify_daily_nudge && hour >= 21) {
+  // Morning briefs are only useful on the day; drop older ones.
+  for (const n of d.notifications) if (n.kind === "brief" && n.id !== `morning-${today}`) changes.push(del("notifications", n.id));
+  if (p.notify_daily_nudge && hour >= 8 && hour < 12) {
+    const sts = safeToSpendFor(d, today);
+    push(notif(`morning-${today}`, "brief", `${formatINR(Math.round(sts.todayLeft))} to spend today`, `${formatINR(Math.round(sts.month))} left for ${sts.daysLeft} day${sts.daysLeft === 1 ? "" : "s"} this month.`, "/"));
+  }
+  if (p.notify_daily_nudge && hour >= 21 && !d.day_logs.some((l) => l.date === today)) {
+    const streak = streakInfo(trackedDays(d.transactions, d.day_logs), today);
     const loggedToday = d.transactions.some((t) => isLive(t) && txnDate(t) === today && t.type === "expense");
-    if (!loggedToday) push(notif(`nudge-${today}`, "nudge", "Log today's spends?", "Takes 5 seconds with quick-add.", "/?add=1"));
+    push(notif(
+      `nudge-${today}`,
+      "nudge",
+      streak.atRisk ? `Keep your ${streak.current}-day streak 🔥` : loggedToday ? "Close your day" : "Log today's spends?",
+      loggedToday ? "Ten seconds: check today's spends and close the day." : "Nothing logged yet today. Add spends or close it as a no-spend day.",
+      "/?close=1",
+    ));
   }
   const reminderDays = p.friend_reminder_days || 14;
   for (const f of d.friends) {

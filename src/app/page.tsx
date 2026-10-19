@@ -2,7 +2,7 @@
 
 import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
 import { TxnDetailSheet } from "@/components/TxnDetail";
 import { TxnRow } from "@/components/TxnRow";
@@ -34,6 +34,13 @@ export default function Home() {
   const syncStatus = useStore((s) => s.syncStatus);
   const [breakdown, setBreakdown] = useState(false);
   const [closing, setClosing] = useState(false);
+  // Deep link from the evening notification: /?close=1
+  useEffect(() => {
+    if (new URLSearchParams(location.search).get("close") === "1") {
+      setClosing(true);
+      history.replaceState(null, "", "/");
+    }
+  }, []);
   const [openTxn, setOpenTxn] = useState<Transaction | null>(null);
   const unread = d.notifications.filter((n) => !n.read).length;
 
