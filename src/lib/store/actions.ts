@@ -9,6 +9,7 @@ import { addDays, dateToTs, istDate } from "../domain/dates";
 import { computeSplit, type Participant } from "../domain/friends";
 import { roundUp } from "../domain/goals";
 import { appliedShares, blockedAmount, issuePrice, realisedPnl, releaseOnAllotment } from "../domain/ipo";
+import { isSalaryIncome } from "../domain/ledger";
 import { merchantKey } from "../domain/parser";
 import type { RecurringCandidate } from "../domain/recurring";
 import { round2 } from "../domain/money";
@@ -159,6 +160,18 @@ export function autoFill(merchant: string | null, d: Tables = getData()) {
   };
 }
 
+/**
+ * Salary logged by hand (quick-add "85000 salary", the "Arrived" button) must
+ * count as salary landing: it stops the expected-salary top-up, starts a new
+ * cycle in salary mode, and satisfies the salary rule so no duplicate draft
+ * gets posted.
+ */
+function markSalary(t: Transaction, d: Tables): Transaction {
+  if (!isSalaryIncome(t, d.categories)) return t.type === "income" ? t : { ...t, is_salary: false };
+  const rule = d.recurring_rules.find((r) => r.active && r.kind === "salary");
+  return { ...t, is_salary: true, recurring_rule_id: t.recurring_rule_id ?? rule?.id ?? null };
+}
+
 export interface SplitInput {
   mode: SplitMode;
   participants: Participant[]; // include { friend_id: null } for me
@@ -176,7 +189,7 @@ export interface NewTxnInput extends Partial<Transaction> {
 export function addTransaction(input: NewTxnInput, opts: { silent?: boolean } = {}): Transaction {
   const d = getData();
   const { split, ...fields } = input;
-  const t = baseTxn(fields);
+  const t = markSalary(baseTxn(fields), d);
   const changes: Change[] = [];
 
   if (split && t.type === "expense") {
@@ -249,7 +262,7 @@ export function updateTransaction(t: Transaction, patch: Partial<Transaction>, s
   const d = getData();
   const before = d.transactions.find((x) => x.id === t.id);
   const changes: Change[] = [];
-  let next: Transaction = { ...t, ...patch, updated_at: nowIso() };
+  let next: Transaction = markSalary({ ...t, ...patch, updated_at: nowIso() }, d);
   if (split !== undefined) {
     for (const s of d.transaction_splits.filter((s) => s.transaction_id === t.id)) changes.push(del("transaction_splits", s.id));
     next = { ...next, my_share: null, paid_by_friend_id: null, payers: null, split_mode: null, group_id: null };

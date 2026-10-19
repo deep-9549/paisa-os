@@ -122,3 +122,16 @@ test("Habit: close the day and see the streak", async ({ page }) => {
   await reload(page, "/review");
   await expect(page.getByText("current streak · best 1")).toBeVisible();
 });
+
+test("Salary logged by hand counts as salary landing (no double income)", async ({ page }) => {
+  await onboard(page);
+  // Before: salary for this cycle isn't recorded, so the app says so.
+  await expect(page.getByText(/Salary not recorded this month|Counting on salary/)).toBeVisible();
+  await page.getByRole("button", { name: "Arrived" }).click();
+  await expect(page.getByLabel("Quick add")).toHaveValue("85000 salary");
+  await page.getByRole("button", { name: /^Save ₹85,000/ }).click();
+  await expect(page.getByText(/Salary not recorded this month|Counting on salary/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Show Safe-to-Spend breakdown" }).first().click();
+  // Income is the one salary, not salary + expected salary.
+  await expect(page.getByRole("link", { name: /^Income this cycle\s*85,000 rupees$/ })).toBeVisible();
+});
