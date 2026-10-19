@@ -3,13 +3,13 @@
 import { Bell, ChartColumn, ChevronRight, CreditCard, Flame, type LucideIcon, Receipt, Repeat, Rocket, Search, Settings, Target, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Amount, Avatar, PageHeader, SectionTitle } from "@/components/ui";
+import { Amount, Avatar, PageHeader, Ring, SectionTitle } from "@/components/ui";
 import { addDays } from "@/lib/domain/dates";
 import { badges } from "@/lib/domain/habits";
 import { savedAmount } from "@/lib/domain/goals";
 import { occurrencesInRange } from "@/lib/domain/recurring";
 import { getProfile } from "@/lib/store/actions";
-import { useCardSummaries, useData, useFriendBalances, useNetWorth, useSafeToSpend, useStreak, useToday } from "@/lib/store/selectors";
+import { useCardSummaries, useData, useFriendBalances, useHealth, useNetWorth, useSafeToSpend, useStreak, useToday } from "@/lib/store/selectors";
 import { useStore } from "@/lib/store/store";
 
 export default function MorePage() {
@@ -21,6 +21,7 @@ export default function MorePage() {
   const bal = useFriendBalances();
   const cards = useCardSummaries();
   const streak = useStreak();
+  const health = useHealth();
   const email = useStore((s) => s.email);
   const owed = [...bal.values()].filter((v) => v > 0).reduce((a, b) => a + b, 0);
   const unread = d.notifications.filter((n) => !n.read).length;
@@ -60,6 +61,17 @@ export default function MorePage() {
         <p className="mt-1 text-xs text-muted">
           Investments <Amount value={nw.investments} /> · card dues <Amount value={-nw.cards} />
         </p>
+      </Link>
+
+      <Link href="/health" className="mt-2 flex items-center gap-3 rounded-3xl border border-line bg-surface p-3.5 shadow-card transition active:scale-[0.99]">
+        <Ring value={health.score / 100} size={52} stroke={6} tone={health.score >= 65 ? "ok" : health.score >= 45 ? "warn" : "over"}>
+          <span className="text-sm font-bold tabular">{health.score}</span>
+        </Ring>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Money health · {health.grade}</span>
+          <span className="block truncate text-xs text-muted">Savings, cushion, cards, budgets, bills, habit</span>
+        </span>
+        <ChevronRight size={18} className="text-muted" aria-hidden />
       </Link>
 
       <SectionTitle>Money</SectionTitle>
