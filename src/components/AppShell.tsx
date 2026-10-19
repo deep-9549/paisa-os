@@ -1,13 +1,14 @@
 "use client";
 
 import {
-  Bell, ChartColumn, ChartPie, CreditCard, House, LayoutGrid, type LucideIcon, Plus, ReceiptText, Repeat, Rocket, Settings, Target, TrendingUp, Users,
+  Bell, ChartColumn, ChartPie, CreditCard, House, LayoutGrid, type LucideIcon, Plus, ReceiptText, Repeat, Rocket, Search, Settings, Target, TrendingUp, Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { type ReactNode, Suspense, useEffect } from "react";
 import { useStore } from "@/lib/store/store";
 import { LockScreen } from "./LockScreen";
+import { AskSheet } from "./AskSheet";
 import { QuickAddSheet } from "./QuickAdd";
 import { cn } from "./ui";
 
@@ -109,6 +110,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Plus size={18} aria-hidden /> Add transaction
           <kbd className="ml-1 rounded-md bg-black/15 px-1.5 text-[11px] font-medium">N</kbd>
         </button>
+        <button onClick={() => useStore.getState().set({ askOpen: true })} className="mb-5 -mt-3 flex h-10 items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 text-sm text-muted transition hover:text-ink">
+          <Search size={16} aria-hidden /> Ask or jump…
+          <kbd className="ml-auto rounded-md border border-line px-1.5 text-[11px]">⌘K</kbd>
+        </button>
         <nav className="flex flex-col gap-4 overflow-y-auto no-scrollbar">
           {SIDEBAR.map((g) => (
             <div key={g.group}>
@@ -148,6 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </nav>
 
       <QuickAddSheet />
+      <AskSheet />
       <Toasts />
       <LockScreen />
       <Shortcuts />

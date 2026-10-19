@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Plus, Rocket, Sparkles, Users, Wallet } from "lucide-react";
+import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Lightbulb, Plus, Rocket, Search, Sparkles, Users, Wallet } from "lucide-react";
 import Link from "next/link";
 import { type ReactNode, useMemo, useState } from "react";
 import { CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
@@ -76,8 +76,8 @@ export default function Home() {
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <StreakPill />
-          <IconButton label={p.privacy_mode ? "Show amounts" : "Hide amounts"} onClick={() => updateProfile({ privacy_mode: !p.privacy_mode })}>
-            {p.privacy_mode ? <EyeOff size={20} /> : <Eye size={20} />}
+          <IconButton label="Ask Paisa" onClick={() => useStore.getState().set({ askOpen: true })}>
+            <Search size={20} />
           </IconButton>
           <IconButton label={`Notifications, ${unread} unread`} href="/notifications" badge={unread}>
             <Bell size={20} />
@@ -89,9 +89,14 @@ export default function Home() {
       <section className="hero mt-4 overflow-hidden rounded-[28px] border border-line p-5 shadow-card animate-rise" aria-label="Safe to spend">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium text-muted">Today you can spend</p>
-          <button onClick={() => setBreakdown(true)} className="-mr-2 flex h-9 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted hover:text-ink" aria-label="Show Safe-to-Spend breakdown">
-            <Info size={14} aria-hidden /> How?
-          </button>
+          <div className="-mr-2 flex items-center">
+            <button onClick={() => updateProfile({ privacy_mode: !p.privacy_mode })} className="flex h-9 w-9 items-center justify-center rounded-full text-muted hover:text-ink" aria-label={p.privacy_mode ? "Show amounts" : "Hide amounts"} aria-pressed={p.privacy_mode}>
+              {p.privacy_mode ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+            <button onClick={() => setBreakdown(true)} className="flex h-9 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted hover:text-ink" aria-label="Show Safe-to-Spend breakdown">
+              <Info size={14} aria-hidden /> How?
+            </button>
+          </div>
         </div>
         <button onClick={() => setBreakdown(true)} className="block text-left" aria-label="Show Safe-to-Spend breakdown">
           <span className={cn("display block text-[56px] leading-none", sts.todayOverBy > 0 && "text-bad")}>
