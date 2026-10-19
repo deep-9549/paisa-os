@@ -189,7 +189,10 @@ export function ask(question: string, ctx: AskContext): Answer {
   }
 
   // Friends
-  const friend = ctx.friends.find((f) => new RegExp(`\\b${f.name.split(/\s+/)[0].toLowerCase()}\\b`).test(q));
+  const friend = ctx.friends.find((f) => {
+    const first = f.name.split(/\s+/)[0].toLowerCase();
+    return first.length > 1 && q.split(/[^\p{L}\p{N}+()&.-]+/u).includes(first);
+  });
   if (/\b(owe|owes|owed|lent|borrow|friends?|settle)\b/.test(q) || (friend && !/\b(spend|spent|split)\b/.test(q))) {
     if (friend) {
       const v = ctx.friendBalances.get(friend.id) ?? 0;

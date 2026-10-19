@@ -76,6 +76,12 @@ describe("ask", () => {
     expect(w.breakdown?.[0]).toMatchObject({ label: "Food", value: 470 });
   });
 
+  it("copes with odd friend names", () => {
+    const odd: Friend = { id: "f2", name: "A+ (office)", upi_id: null, phone: null, color: "#000", archived: false };
+    expect(() => ask("who owes me", ctx({ friends: [rahul, odd] }))).not.toThrow();
+    expect(ask("does a+ owe me", ctx({ friends: [odd], friendBalances: new Map([["f2", -50]]) })).title).toBe("You owe A+ (office) ₹50");
+  });
+
   it("says when it can't find something", () => {
     expect(ask("zzzqqq", ctx()).kind).toBe("none");
   });
