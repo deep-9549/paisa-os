@@ -100,3 +100,20 @@ export const SUGGESTED_SPLIT: { path: string; pct: number }[] = [
   { path: "Health", pct: 3 },
   { path: "Personal care", pct: 2 },
 ];
+
+/**
+ * Typical monthly spend per category (children rolled into parents), averaged
+ * over the given past cycles that have any spending at all, so months before
+ * you started tracking don't drag the average down.
+ */
+export function typicalSpend(txns: Transaction[], categories: Category[], cycles: Cycle[]): Map<string | null, number> {
+  const months = cycles.map((c) => rollUp(spendByCategory(txns, c.start, c.end), categories)).filter((m) => [...m.values()].some((v) => v > 0));
+  const out = new Map<string | null, number>();
+  if (!months.length) return out;
+  for (const m of months) for (const [k, v] of m) out.set(k, (out.get(k) ?? 0) + v);
+  for (const [k, v] of out) out.set(k, round2(v / months.length));
+  return out;
+}
+
+/** A budget suggestion: the typical spend rounded up to a friendly number. */
+export const suggestBudget = (typical: number) => (typical <= 0 ? 0 : Math.ceil(typical / (typical >= 5000 ? 500 : 100)) * (typical >= 5000 ? 500 : 100));

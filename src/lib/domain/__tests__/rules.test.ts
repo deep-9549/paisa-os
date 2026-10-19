@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Hold, IpoApplication, RecurringRule } from "../../types";
-import { paceStatus } from "../budgets";
+import { paceStatus, suggestBudget, typicalSpend } from "../budgets";
 import { billEffect, computeSplit, friendBalances, simplifyDebts, upiPayLink } from "../friends";
 import { goalReserve, plannedMonthly, roundUp } from "../goals";
 import { blockedAmount, listingGainPct, realisedPnl, releaseOnAllotment, taxEstimate } from "../ipo";
@@ -265,5 +265,27 @@ describe("recurring detection", () => {
     expect(detectRecurring(txns, [], "2026-10-19")).toHaveLength(0);
     const live = [mk("2026-08-05"), mk("2026-09-05"), mk("2026-10-05")];
     expect(detectRecurring(live, [{ name: "Netflix" } as never], "2026-10-19")).toHaveLength(0);
+  });
+});
+
+describe("budget suggestions", () => {
+  const cats = [
+    { id: "food", name: "Food", parent_id: null, icon: "", color: "", kind: "expense" as const },
+    { id: "deliv", name: "Delivery", parent_id: "food", icon: "", color: "", kind: "expense" as const },
+  ];
+  const cycles = [
+    { start: "2026-07-01", end: "2026-07-31", length: 31 },
+    { start: "2026-08-01", end: "2026-08-31", length: 31 },
+    { start: "2026-09-01", end: "2026-09-30", length: 30 },
+  ];
+  it("averages only months with data and rolls children up", () => {
+    const t = typicalSpend([txn({ date: "2026-08-03", amount: 3000, category_id: "deliv" }), txn({ date: "2026-09-03", amount: 5000, category_id: "food" })], cats, cycles);
+    expect(t.get("food")).toBe(4000);
+    expect(t.get("deliv")).toBe(1500);
+  });
+  it("rounds suggestions up to friendly numbers", () => {
+    expect(suggestBudget(4012)).toBe(4100);
+    expect(suggestBudget(7210)).toBe(7500);
+    expect(suggestBudget(0)).toBe(0);
   });
 });
