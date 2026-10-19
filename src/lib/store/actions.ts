@@ -31,7 +31,7 @@ export function defaultProfile(): Profile {
     id: PROFILE_ID, name: "Deep", salary: 0,
     cycle_history: [{ effective_from: "2000-01-01", mode: "calendar", start_day: 1 }],
     buffer_pct: 5, stcg_rate: 20, ltcg_rate: 12.5, card_cap: null, default_account_id: null, my_upi_id: null,
-    pin_hash: null, webauthn_credential_id: null, lock_minutes: 5, theme: "dark", privacy_mode: false, onboarded: false,
+    pin_hash: null, webauthn_credential_id: null, lock_minutes: 5, theme: "system", privacy_mode: false, onboarded: false,
     notify_daily_nudge: true, notify_weekly: true, friend_reminder_days: 14, family_pans: [], email_digest: false,
     created_at: nowIso(),
   };
@@ -577,6 +577,15 @@ export function saveHolding(h: Partial<Tables["holdings"][number]> & { name: str
   commit([up("holdings", { id: uid(), symbol: null, kind: "stock", quantity: 0, avg_cost: 0, current_price: 0, account_id: null, ipo_application_id: null, buy_date: null, as_of: istDate(), ...h })]);
 }
 export const deleteHolding = (id: string) => commit([del("holdings", id)]);
+
+// ---------------- daily habit ----------------
+
+/** Close (review) a day: snapshots its spend vs allowance for streaks and badges. */
+export function closeDay(date: string, spent: number, allowance: number, mood: string | null, note: string | null) {
+  commit([up("day_logs", { id: date, date, mood, note, spent: round2(spent), allowance: round2(allowance), closed_at: nowIso() })]);
+}
+
+export const reopenDay = (date: string) => commit([del("day_logs", date)]);
 
 // ---------------- notifications ----------------
 

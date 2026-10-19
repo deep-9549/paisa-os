@@ -5,6 +5,7 @@ import { type CardSummary, summariseCard } from "../domain/cards";
 import { type Cycle, getCycle, previousCycle } from "../domain/cycle";
 import { istDate } from "../domain/dates";
 import { friendBalances } from "../domain/friends";
+import { frequentSpends, streakInfo, trackedDays } from "../domain/habits";
 import { netWorth } from "../domain/insights";
 import { accountBalance, isLive, txnDate } from "../domain/ledger";
 import { computeSafeToSpend, type SafeToSpend } from "../domain/safeToSpend";
@@ -105,3 +106,15 @@ export function useLookups() {
 }
 
 export const liveTxns = (d: Tables) => d.transactions.filter(isLive);
+
+export function useStreak() {
+  const d = useData();
+  const today = useToday();
+  return useMemo(() => streakInfo(trackedDays(d.transactions, d.day_logs), today), [d.transactions, d.day_logs, today]);
+}
+
+export function useFrequent(n = 6) {
+  const d = useData();
+  const today = useToday();
+  return useMemo(() => frequentSpends(d.transactions, today, n), [d.transactions, today, n]);
+}

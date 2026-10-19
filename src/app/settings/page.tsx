@@ -86,7 +86,7 @@ export default function SettingsPage() {
 
       <SectionTitle>Appearance</SectionTitle>
       <Card>
-        <Segmented value={p.theme} onChange={(v) => updateProfile({ theme: v })} options={[{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
+        <Segmented value={p.theme} onChange={(v) => updateProfile({ theme: v })} options={[{ value: "system", label: "Auto" }, { value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
       </Card>
 
       <SectionTitle>Sync</SectionTitle>

@@ -234,6 +234,13 @@ export function loadDemo() {
     { id: uid(), label: "Chai", text: "20 chai upi", emoji: "☕" },
     { id: uid(), label: "Fuel", text: "500 petrol upi", emoji: "⛽" },
   ];
+  // Habit history: the last 11 days closed (yesterday back), with a few moods.
+  const moods = ["😌", "🙂", "🎉", "😬", null];
+  base.day_logs = Array.from({ length: 11 }, (_, i) => {
+    const date = addDays(today, -(i + 1));
+    const spent = tx.filter((t) => !t.exclude_from_budget && t.type === "expense" && istDate(t.occurred_at) === date).reduce((a, t) => a + (t.my_share ?? t.amount), 0);
+    return { id: date, date, mood: moods[i % moods.length], note: null, spent, allowance: 1100, closed_at: dateToTs(date, "22:00") };
+  });
   base.profiles = [{
     ...defaultProfile(), name: "Deep", salary: 85000, onboarded: true, default_account_id: bank.id, my_upi_id: "deep@boi",
     cycle_history: [{ effective_from: "2000-01-01", mode: "calendar", start_day: 1 }],

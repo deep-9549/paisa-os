@@ -38,7 +38,7 @@ function Activity() {
   const [open, setOpen] = useState<Transaction | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [dayFilter, setDayFilter] = useState<string | null>(null);
+  const [dayFilter, setDayFilter] = useState<string | null>(params.get("day"));
 
   const catFamily = useMemo(() => {
     if (!category) return null;
@@ -89,7 +89,7 @@ function Activity() {
         }
       />
       <div className="flex gap-2">
-        <Input placeholder="Search merchant, note, amount, #tag…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search transactions" />
+        <Input placeholder="Search merchant, note, amount, #tag…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search transactions" autoFocus={params.get("focus") === "1"} type="search" />
         <Button onClick={() => setFiltersOpen(true)} aria-label="Filters">⚙︎{activeFilters ? ` ${activeFilters}` : ""}</Button>
       </div>
       <div className="mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar">

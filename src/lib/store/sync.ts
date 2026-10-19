@@ -13,7 +13,7 @@ import { supabase } from "../supabase";
 let flushing = false;
 
 /** Tables keyed by deterministic text ids are unique per user on the server. */
-const PER_USER_KEY = new Set<TableName>(["profiles", "merchant_memory", "net_worth_snapshots", "notifications", "job_runs"]);
+const PER_USER_KEY = new Set<TableName>(["profiles", "merchant_memory", "net_worth_snapshots", "notifications", "job_runs", "day_logs"]);
 const conflictTarget = (t: TableName) =>
   PER_USER_KEY.has(t) ? "user_id,id" : t === "card_cycles" ? "card_id,start_date" : PRIMARY_KEY[t];
 /** Server-only columns that must never be written back (generated / trigger-owned). */
@@ -25,7 +25,7 @@ const ORDER: TableName[] = [
   "profiles", "accounts", "categories", "friends", "friend_groups", "recurring_rules", "ipo_applications",
   "credit_cards", "upi_handles", "card_cycles", "goals", "transactions", "card_emis", "transaction_splits",
   "group_members", "holds", "holdings", "settlements", "goal_contributions", "budget_lines", "rules",
-  "merchant_memory", "templates", "net_worth_snapshots", "notifications", "audit_log", "job_runs",
+  "merchant_memory", "templates", "net_worth_snapshots", "notifications", "audit_log", "job_runs", "day_logs",
 ];
 
 export async function flushOutbox(): Promise<void> {

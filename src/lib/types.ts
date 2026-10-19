@@ -376,7 +376,7 @@ export interface Profile {
   pin_hash: string | null;
   webauthn_credential_id: string | null;
   lock_minutes: number;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "system";
   privacy_mode: boolean;
   onboarded: boolean;
   notify_daily_nudge: boolean;
@@ -395,6 +395,18 @@ export interface AuditEntry {
   action: "create" | "update" | "delete" | "restore";
   before: unknown;
   at: Timestamp;
+}
+
+/** A day the user "closed": reviewed today's spends (drives streaks). */
+export interface DayLog {
+  id: ID; // the IST date
+  user_id?: string;
+  date: DateStr;
+  mood: string | null; // emoji
+  note: string | null;
+  spent: number; // budget spend that day, snapshotted at close
+  allowance: number; // daily allowance that day, snapshotted at close
+  closed_at: Timestamp;
 }
 
 export interface JobRun {
@@ -434,6 +446,7 @@ export interface Tables {
   notifications: AppNotification[];
   audit_log: AuditEntry[];
   job_runs: JobRun[];
+  day_logs: DayLog[];
 }
 
 export type TableName = keyof Tables;
@@ -467,6 +480,7 @@ export const PRIMARY_KEY: Record<TableName, string> = {
   notifications: "id",
   audit_log: "id",
   job_runs: "id",
+  day_logs: "id",
 };
 
 export const TABLE_NAMES = Object.keys(PRIMARY_KEY) as TableName[];
