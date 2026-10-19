@@ -44,7 +44,17 @@ export default function Onboarding() {
 
   const canNext = [true, sal > 0, banks.every((b) => b.name && parseAmount(b.balance || "0") !== null), !hasCard || (card.last4.length === 4 && (parseAmount(card.limit) ?? 0) > 0), !hasRent || (parseAmount(rent.amount) ?? 0) > 0, true][step];
 
+  const [finishError, setFinishError] = useState<string | null>(null);
+
   async function finish() {
+    try {
+      await doFinish();
+    } catch (e) {
+      setFinishError((e as Error).message || "Something went wrong saving your setup.");
+    }
+  }
+
+  async function doFinish() {
     completeOnboarding({
       name,
       pinHash: pin.length === 4 ? await hashPin(pin, PROFILE_ID) : null,
@@ -210,6 +220,7 @@ export default function Onboarding() {
           <Button variant="primary" className="flex-1" onClick={finish}>See my Safe-to-Spend →</Button>
         )}
       </div>
+      {finishError && <p className="mt-3 text-sm text-bad" role="alert">Couldn&apos;t finish setup: {finishError}</p>}
       {step === 0 && (
         <button className="mt-6 min-h-11 w-full text-sm text-muted hover:text-ink" onClick={() => { loadDemo(); router.replace("/"); }}>
           Just exploring? Load demo data instead
