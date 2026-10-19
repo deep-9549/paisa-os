@@ -6,7 +6,7 @@ import { Suspense, useMemo, useState } from "react";
 import { TxnDetailSheet } from "@/components/TxnDetail";
 import { groupByDay, TxnRow } from "@/components/TxnRow";
 import { Amount, Button, Chip, Empty, Input, PageHeader, Segmented, Select, Sheet, cn } from "@/components/ui";
-import { addDays, clampedDate, fmtDate, fmtMonth, parseDate, relativeDay, toDateStr } from "@/lib/domain/dates";
+import { addDays, clampedDate, dayHeading, fmtDate, fmtMonth, parseDate, toDateStr } from "@/lib/domain/dates";
 import { budgetImpact, isLive, spendInRange, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
 import { bulkUpdate, categoryPath, deleteTransactions } from "@/lib/store/actions";
@@ -131,7 +131,7 @@ function Activity() {
           {groups.map(([day, list]) => (
             <section key={day} className="mb-3">
               <div className="sticky top-0 z-10 -mx-1 flex justify-between bg-bg/90 px-3 py-2 text-xs font-semibold text-muted backdrop-blur">
-                <span>{relativeDay(day, today)} · {fmtDate(day)}</span>
+                <span>{dayHeading(day, today)}</span>
                 <Amount value={-list.reduce((a, t) => a + budgetImpact(t), 0)} />
               </div>
               <div className="rounded-3xl border border-line bg-surface p-1 shadow-card">

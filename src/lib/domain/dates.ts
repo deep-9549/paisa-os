@@ -112,3 +112,9 @@ export function relativeDay(s: DateStr, today: DateStr): string {
 export function dateToTs(s: DateStr, time = "12:00"): Timestamp {
   return new Date(`${s}T${time}:00+05:30`).toISOString();
 }
+
+/** "Today · 20 Oct", "3 days ago · 17 Oct", or just "10 Oct" when the relative form is already a date. */
+export function dayHeading(s: DateStr, today: DateStr): string {
+  const rel = relativeDay(s, today);
+  return /^\d/.test(rel) ? rel : `${rel} · ${fmtDate(s)}`;
+}

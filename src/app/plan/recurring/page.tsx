@@ -6,7 +6,7 @@ import { SpottedCard, useSpotted } from "@/components/Spotted";
 import { PLAN_TABS, SubTabs } from "@/components/PlanTabs";
 import { Amount, Badge, Button, Card, Empty, Field, Input, PageHeader, Row, SectionTitle, Segmented, Select, Sheet, Toggle } from "@/components/ui";
 import { ordinal } from "@/lib/domain/cycle";
-import { addDays, fmtDate, istDate, relativeDay } from "@/lib/domain/dates";
+import { addDays, dayHeading, fmtDate, istDate } from "@/lib/domain/dates";
 import { formatINR, parseAmount } from "@/lib/domain/money";
 import { expectedAmount, isVariable, nextOccurrence, occurrencesInRange, postedFor, yearlyCost } from "@/lib/domain/recurring";
 import { fyRange } from "@/lib/domain/tax";
@@ -44,7 +44,7 @@ export default function RecurringPage() {
           {upcoming.length === 0 && <Empty icon="🗓️" title="Nothing scheduled" body="Add rent, bills and subscriptions so they're reserved on salary day." />}
           {groupByDate(upcoming).map(([date, list]) => (
             <div key={date} className="mb-2">
-              <p className="px-2 py-1 text-xs font-semibold text-muted">{relativeDay(date, today)} · {fmtDate(date)}</p>
+              <p className="px-2 py-1 text-xs font-semibold text-muted">{dayHeading(date, today)}</p>
               <Card className="p-1">
                 {list.map((o) => (
                   <Row
