@@ -4,6 +4,7 @@ import { Bell, CalendarClock, ChevronRight, CreditCard, Eye, EyeOff, Info, Light
 import Link from "next/link";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CloseDayCard, CloseDaySheet, StreakPill, WeekStrip } from "@/components/Habit";
+import { GettingStarted } from "@/components/GettingStarted";
 import { SpottedCard, useSpotted } from "@/components/Spotted";
 import { TxnDetailSheet } from "@/components/TxnDetail";
 import { TxnRow } from "@/components/TxnRow";
@@ -176,6 +177,7 @@ export default function Home() {
       </div>
 
       <CloseDayCard onOpen={() => setClosing(true)} />
+      <GettingStarted onCloseDay={() => setClosing(true)} />
 
       {spotted[0] && (
         <div className="mt-3">
@@ -187,7 +189,12 @@ export default function Home() {
       {(sts.expectedSalary > 0 || drafts.length > 0 || insights.length > 0 || (isLastDays && sts.month > 0 && d.goals.some((g) => !g.archived))) && (
         <div className="mt-3 space-y-2">
           {sts.expectedSalary > 0 && (
-            <Nudge icon={<Wallet size={18} />} tone="info" title={`Counting on salary of ${formatINR(sts.expectedSalary)}`} body="Mark it when it lands so the numbers use real income.">
+            <Nudge
+              icon={<Wallet size={18} />}
+              tone="info"
+              title={sts.cappedByCash ? "Salary not recorded this month" : `Counting on salary of ${formatINR(sts.expectedSalary)}`}
+              body={sts.cappedByCash ? `Until it is, Safe-to-Spend only uses the cash you actually have (${formatINR(Math.round(sts.trueCash))}).` : "Mark it when it lands so the numbers use real income."}
+            >
               <Button size="sm" onClick={() => setQuickAdd({ open: true, text: `${sts.expectedSalary} salary` })}>Arrived</Button>
             </Nudge>
           )}
@@ -286,7 +293,7 @@ export default function Home() {
             <span className="block text-[11px] font-normal text-muted">{Math.round(Math.max(...cards.map((c) => c.utilisation)) * 100)}% max utilised</span>
           </Tile>
         )}
-        <Tile href="/friends" icon={<Users size={16} />} label="Friends owe you">
+        {d.friends.length > 0 && <Tile href="/friends" icon={<Users size={16} />} label="Friends owe you">
           <Amount value={owedToMe} className="text-good" />
           <span className="flex items-center gap-1 text-[11px] font-normal text-muted">
             you owe <Amount value={iOwe} />
@@ -297,7 +304,7 @@ export default function Home() {
               })}
             </span>
           </span>
-        </Tile>
+        </Tile>}
         {(activeHolds.length > 0 || d.ipo_applications.length > 0) && (
           <Tile href="/invest" icon={<Rocket size={16} />} label="IPO holds">
             <Amount value={sts.holds} />
@@ -390,6 +397,11 @@ function BreakdownSheet({ open, onClose }: { open: boolean; onClose: () => void 
             <Amount value={l.value} className="text-sm font-semibold" sign />
           </Link>
         ))}
+        {sts.cappedByCash && (
+          <p className="mx-2 rounded-xl bg-info/10 p-2.5 text-xs text-info">
+            Salary isn&apos;t recorded this month yet, so this is limited to your true cash ({formatINR(sts.trueCash)}) minus unpaid bills.
+          </p>
+        )}
         <div className="flex items-center justify-between border-t border-line px-2 pt-3">
           <span className="font-semibold">Left this month</span>
           <Amount value={sts.month} className="text-lg font-bold" />

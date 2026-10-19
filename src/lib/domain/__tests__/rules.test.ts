@@ -168,6 +168,18 @@ describe("Safe-to-Spend", () => {
     expect(r.investments).toBe(5000);
     expect(r.spent).toBe(0);
   });
+  it("caps at real cash until salary is recorded (mid-month setup)", () => {
+    const poor = acct({ opening_balance: 20000, opening_date: "2026-10-19" });
+    const rent = rule({ due_day: 25 });
+    const r = computeSafeToSpend({ ...base, accounts: [poor], transactions: [], rules: [rent], holds: [] });
+    expect(r.expectedSalary).toBe(80000);
+    expect(r.cappedByCash).toBe(true);
+    expect(r.month).toBe(20000 - 15000);
+    const savings = acct({ opening_balance: 200000, opening_date: "2026-09-01" });
+    const rich = computeSafeToSpend({ ...base, accounts: [savings], transactions: [], rules: [rent], holds: [] });
+    expect(rich.cappedByCash).toBe(false);
+    expect(rich.month).toBe(80000 - 15000 - 4000);
+  });
   it("daily allowance never shown below zero", () => {
     const big = txn({ amount: 200000, account_id: bank.id, date: "2026-10-19" });
     const r = computeSafeToSpend({ ...base, transactions: [big], rules: [], holds: [] });

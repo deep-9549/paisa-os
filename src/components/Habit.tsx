@@ -3,7 +3,7 @@
 import { Check, Flame, Moon } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { fmtDate, weekdayName } from "@/lib/domain/dates";
+import { fmtDate, istDate, weekdayName } from "@/lib/domain/dates";
 import { dailySeries, dayVerdict, nextMilestone, streakInfo, trackedDays, weekOf } from "@/lib/domain/habits";
 import { isLive, spendInRange, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
@@ -43,6 +43,8 @@ export function WeekStrip({ allowance }: { allowance: number }) {
   const wk = weekOf(today);
   const pts = useMemo(() => dailySeries(d.transactions, d.day_logs, wk.start, wk.end, today), [d.transactions, d.day_logs, wk.start, wk.end, today]);
   const max = Math.max(allowance, ...pts.map((p) => p.spent), 1);
+  // Days before you started using the app aren't "no-spend" days.
+  const since = d.profiles[0]?.created_at ? istDate(d.profiles[0].created_at) : "";
   const total = pts.reduce((a, p) => a + p.spent, 0);
   return (
     <div>
@@ -54,7 +56,7 @@ export function WeekStrip({ allowance }: { allowance: number }) {
           const isToday = p.date === today;
           return (
             <Link key={p.date} href={`/activity?day=${p.date}`} className="group relative flex h-full flex-1 flex-col items-center justify-end">
-              {!p.future && p.spent === 0 && p.date < today ? (
+              {!p.future && p.spent === 0 && p.date < today && p.date >= since ? (
                 <span className="mb-1 text-[10px] font-semibold text-good">₹0</span>
               ) : null}
               <div
