@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarRange, Pencil, RotateCcw, Star, Trash2, Undo2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { emiSchedule } from "@/lib/domain/cards";
 import { fmtDate, istDate } from "@/lib/domain/dates";
@@ -8,9 +9,13 @@ import { formatINR, parseAmount } from "@/lib/domain/money";
 import { addRefund, categoryPath, confirmDraft, convertToEmi, deleteTransactions, restoreTransactions, saveTemplate } from "@/lib/store/actions";
 import { useData, useLookups } from "@/lib/store/selectors";
 import { receiptUrl } from "@/lib/receipts";
+import { useStore } from "@/lib/store/store";
 import type { Transaction } from "@/lib/types";
 import { TxnForm } from "./TxnForm";
 import { Amount, Badge, Button, Field, Input, Segmented, Sheet } from "./ui";
+
+/** Quick-add keyword for each method, so "Log again" keeps the same rail. */
+const QA_METHOD: Record<Transaction["method"], string> = { upi: "upi", card: "card", cash: "cash", netbanking: "netbanking", auto_debit: "autodebit", other: "" };
 
 export function TxnDetailSheet({ txn, onClose }: { txn: Transaction | null; onClose: () => void }) {
   const d = useData();
@@ -143,13 +148,23 @@ function Detail({ t, setMode, onClose }: { t: Transaction; setMode: (m: "edit" |
           <Button className="col-span-2" onClick={() => restoreTransactions([t.id])}>Restore</Button>
         ) : (
           <>
-            <Button onClick={() => setMode("edit")}>✏️ Edit</Button>
-            {t.type === "expense" && refundableLeft(t, d.transactions) > 0 && <Button onClick={() => setMode("refund")}>↩ Refund</Button>}
-            {isCardSwipe && t.amount >= 2500 && <Button onClick={() => setMode("emi")}>📆 Convert to EMI</Button>}
+            <Button onClick={() => setMode("edit")}><Pencil size={16} aria-hidden /> Edit</Button>
             {t.type === "expense" && t.merchant && (
-              <Button onClick={() => saveTemplate(t.merchant!, `${t.amount} ${t.merchant} ${t.method === "card" ? "card" : t.method}`, d.categories.find((c) => c.id === t.category_id)?.icon ?? "⭐")}>⭐ Save as template</Button>
+              <Button
+                onClick={() => {
+                  onClose();
+                  useStore.getState().setQuickAdd({ open: true, text: `${t.my_share ?? t.amount} ${t.merchant} ${QA_METHOD[t.method]}` });
+                }}
+              >
+                <RotateCcw size={16} aria-hidden /> Log again
+              </Button>
             )}
-            <Button variant="danger" onClick={() => { deleteTransactions([t.id]); onClose(); }}>🗑 Delete</Button>
+            {t.type === "expense" && refundableLeft(t, d.transactions) > 0 && <Button onClick={() => setMode("refund")}><Undo2 size={16} aria-hidden /> Refund</Button>}
+            {isCardSwipe && t.amount >= 2500 && <Button onClick={() => setMode("emi")}><CalendarRange size={16} aria-hidden /> Convert to EMI</Button>}
+            {t.type === "expense" && t.merchant && (
+              <Button onClick={() => saveTemplate(t.merchant!, `${t.amount} ${t.merchant} ${t.method === "card" ? "card" : t.method}`, d.categories.find((c) => c.id === t.category_id)?.icon ?? "⭐")}><Star size={16} aria-hidden /> Save as template</Button>
+            )}
+            <Button variant="danger" onClick={() => { deleteTransactions([t.id]); onClose(); }}><Trash2 size={16} aria-hidden /> Delete</Button>
           </>
         )}
       </div>

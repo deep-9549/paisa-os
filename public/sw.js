@@ -1,6 +1,6 @@
 /* Paisa OS service worker: offline app shell, cached static assets, web push. */
-const VERSION = "paisa-os-v1";
-const SHELL = ["/", "/activity", "/cards", "/plan", "/more", "/manifest.webmanifest", "/icon.svg", "/icons/icon-192.png"];
+const VERSION = "paisa-os-v2";
+const SHELL = ["/", "/activity", "/cards", "/plan", "/more", "/review", "/manifest.webmanifest", "/icon.svg", "/icons/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -42,16 +42,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Pages: network-first, fall back to the cached shell when offline.
+  // Pages: stale-while-revalidate. Data lives in IndexedDB, so the cached shell
+  // opens instantly (even on a slow network) and the fresh copy is used next
+  // time. Hashed /_next/static assets stay cached, so an older shell still works.
   if (req.mode === "navigate") {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(VERSION).then((c) => c.put(req, copy));
+      caches.open(VERSION).then(async (cache) => {
+        const cached = await cache.match(url.pathname);
+        const network = fetch(req).then((res) => {
+          if (res.ok && !res.redirected) cache.put(url.pathname, res.clone());
           return res;
-        })
-        .catch(() => caches.match(req).then((hit) => hit || caches.match("/"))),
+        });
+        if (cached) {
+          event.waitUntil(network.catch(() => {}));
+          return cached;
+        }
+        return network.catch(() => cache.match("/"));
+      }),
     );
   }
 });
@@ -76,7 +83,8 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const href = (event.notification.data && event.notification.data.href) || "/";
+  const quick = { add: "/?add=1", close: "/?close=1" };
+  const href = quick[event.action] || (event.notification.data && event.notification.data.href) || "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {

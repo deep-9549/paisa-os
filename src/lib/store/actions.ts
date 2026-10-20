@@ -9,11 +9,15 @@ import { addDays, dateToTs, istDate } from "../domain/dates";
 import { computeSplit, type Participant } from "../domain/friends";
 import { roundUp } from "../domain/goals";
 import { appliedShares, blockedAmount, issuePrice, realisedPnl, releaseOnAllotment } from "../domain/ipo";
-import { merchantKey } from "../domain/parser";
+import { isSalaryIncome } from "../domain/ledger";
+import { keywordCategory, merchantKey } from "../domain/parser";
+import type { SmsDraft } from "../domain/sms";
+import { tripTag } from "../domain/trips";
+import type { RecurringCandidate } from "../domain/recurring";
 import { round2 } from "../domain/money";
 import type {
   Account, CardEmi, Category, CreditCard, Friend, Goal, Hold, ID, IpoApplication, PayMethod, Profile,
-  RecurringRule, SplitMode, Tables, Transaction, TransactionSplit,
+  RecurringRule, SplitMode, Tables, Transaction, TransactionSplit, Trip,
 } from "../types";
 import { type Change, getData, nowIso, uid, useStore } from "./store";
 
@@ -31,7 +35,7 @@ export function defaultProfile(): Profile {
     id: PROFILE_ID, name: "Deep", salary: 0,
     cycle_history: [{ effective_from: "2000-01-01", mode: "calendar", start_day: 1 }],
     buffer_pct: 5, stcg_rate: 20, ltcg_rate: 12.5, card_cap: null, default_account_id: null, my_upi_id: null,
-    pin_hash: null, webauthn_credential_id: null, lock_minutes: 5, theme: "dark", privacy_mode: false, onboarded: false,
+    pin_hash: null, webauthn_credential_id: null, lock_minutes: 5, theme: "system", privacy_mode: false, onboarded: false,
     notify_daily_nudge: true, notify_weekly: true, friend_reminder_days: 14, family_pans: [], email_digest: false,
     created_at: nowIso(),
   };
@@ -158,6 +162,18 @@ export function autoFill(merchant: string | null, d: Tables = getData()) {
   };
 }
 
+/**
+ * Salary logged by hand (quick-add "85000 salary", the "Arrived" button) must
+ * count as salary landing: it stops the expected-salary top-up, starts a new
+ * cycle in salary mode, and satisfies the salary rule so no duplicate draft
+ * gets posted.
+ */
+function markSalary(t: Transaction, d: Tables): Transaction {
+  if (!isSalaryIncome(t, d.categories)) return t.type === "income" ? t : { ...t, is_salary: false };
+  const rule = d.recurring_rules.find((r) => r.active && r.kind === "salary");
+  return { ...t, is_salary: true, recurring_rule_id: t.recurring_rule_id ?? rule?.id ?? null };
+}
+
 export interface SplitInput {
   mode: SplitMode;
   participants: Participant[]; // include { friend_id: null } for me
@@ -175,7 +191,7 @@ export interface NewTxnInput extends Partial<Transaction> {
 export function addTransaction(input: NewTxnInput, opts: { silent?: boolean } = {}): Transaction {
   const d = getData();
   const { split, ...fields } = input;
-  const t = baseTxn(fields);
+  const t = markSalary(baseTxn(fields), d);
   const changes: Change[] = [];
 
   if (split && t.type === "expense") {
@@ -218,15 +234,37 @@ export function addTransaction(input: NewTxnInput, opts: { silent?: boolean } = 
   }
 
   commit(changes);
-  if (!opts.silent) toast(`Saved ₹${t.amount.toLocaleString("en-IN")}${t.merchant ? ` · ${t.merchant}` : ""}`);
+  if (!opts.silent) {
+    navigatorVibrate(15);
+    toast(`Saved ₹${t.amount.toLocaleString("en-IN")}${t.merchant ? ` · ${t.merchant}` : ""}`, { label: "Undo", run: () => undoAdd(changes, d) });
+  }
   return t;
 }
+
+/** Reverse an addTransaction commit exactly: drop its rows, restore merchant memory. */
+function undoAdd(changes: Change[], before: Tables) {
+  const back: Change[] = [];
+  for (const c of changes) {
+    if (c.op !== "upsert" || !c.row) continue;
+    const key = String(c.row[c.table === "credit_cards" ? "account_id" : "id"]);
+    if (c.table === "merchant_memory") {
+      const prev = before.merchant_memory.find((m) => m.id === key);
+      back.push(prev ? up("merchant_memory", prev) : del("merchant_memory", key));
+    } else if (c.table !== "friends") back.push(del(c.table, key));
+  }
+  commit(back);
+  toast("Removed");
+}
+
+const navigatorVibrate = (ms: number) => {
+  if (typeof navigator !== "undefined") navigator.vibrate?.(ms);
+};
 
 export function updateTransaction(t: Transaction, patch: Partial<Transaction>, split?: SplitInput | null) {
   const d = getData();
   const before = d.transactions.find((x) => x.id === t.id);
   const changes: Change[] = [];
-  let next: Transaction = { ...t, ...patch, updated_at: nowIso() };
+  let next: Transaction = markSalary({ ...t, ...patch, updated_at: nowIso() }, d);
   if (split !== undefined) {
     for (const s of d.transaction_splits.filter((s) => s.transaction_id === t.id)) changes.push(del("transaction_splits", s.id));
     next = { ...next, my_share: null, paid_by_friend_id: null, payers: null, split_mode: null, group_id: null };
@@ -293,6 +331,27 @@ export function addRefund(orig: Transaction, amount: number, date: string) {
 export function confirmDraft(t: Transaction, amount?: number) {
   commit([up("transactions", { ...t, is_draft: false, amount: amount ?? t.amount, updated_at: nowIso() })]);
   toast("Confirmed");
+}
+
+/** A parsed bank SMS as a new transaction: card by last 4 digits, category from memory, rules or keywords. */
+export function smsToTxn(s: SmsDraft, d: Tables = getData()): NewTxnInput {
+  const card = s.isCard && s.last4 ? d.credit_cards.find((c) => c.last4 === s.last4) : undefined;
+  const mem = s.merchant ? autoFill(s.merchant, d) : null;
+  const account = card?.account_id ?? (mem?.account_id && d.accounts.some((a) => a.id === mem.account_id) ? mem.account_id : null) ?? defaultAccountFor(s.isCard ? "card" : s.method, d)?.id ?? null;
+  if (s.direction === "credit") {
+    const path = s.merchant ? keywordCategory(s.merchant) : null;
+    return {
+      type: "income", amount: s.amount, account_id: account && !d.credit_cards.some((c) => c.account_id === account) ? account : defaultAccountFor("upi", d)?.id ?? null,
+      method: s.method, merchant: s.merchant, category_id: (path?.startsWith("Income") ? categoryByPath(path, d.categories)?.id : categoryByPath("Income › Other income", d.categories)?.id) ?? null,
+      occurred_at: dateToTs(s.date ?? istDate()), note: "From SMS",
+    };
+  }
+  const path = s.merchant ? keywordCategory(s.merchant) : null;
+  return {
+    type: "expense", amount: s.amount, account_id: account, method: card ? "card" : s.method, merchant: s.merchant,
+    category_id: mem?.category_id ?? (path ? categoryByPath(path, d.categories)?.id ?? null : null),
+    occurred_at: dateToTs(s.date ?? istDate()), note: "From SMS",
+  };
 }
 
 // ---------------- credit cards ----------------
@@ -364,6 +423,16 @@ export function newRule(p: Partial<RecurringRule> & { name: string; amount: numb
     method: "upi", category_id: null, auto_post: false, active: true, landlord: null, landlord_pan: null,
     property_address: null, escalation_pct: 0, deposit: 0, last_used_note: null, tags: [], ...p,
   };
+}
+
+/** Start tracking a repeating spend found by detectRecurring. */
+export function trackCandidate(c: RecurringCandidate) {
+  saveRule(newRule({
+    name: c.merchant, amount: c.amount, kind: c.kind, frequency: c.frequency, due_day: c.dueDay,
+    start_date: addDays(c.last, 1), method: c.method, account_id: c.account_id, category_id: c.category_id,
+    auto_post: c.kind === "subscription",
+  }));
+  toast(`Tracking ${c.merchant} as ${c.frequency}`);
 }
 
 export function deleteRule(id: string) {
@@ -577,6 +646,28 @@ export function saveHolding(h: Partial<Tables["holdings"][number]> & { name: str
   commit([up("holdings", { id: uid(), symbol: null, kind: "stock", quantity: 0, avg_cost: 0, current_price: 0, account_id: null, ipo_application_id: null, buy_date: null, as_of: istDate(), ...h })]);
 }
 export const deleteHolding = (id: string) => commit([del("holdings", id)]);
+
+// ---------------- trips ----------------
+
+export function newTrip(p: Partial<Trip> & { name: string; start_date: string; end_date: string }): Trip {
+  return { id: uid(), emoji: "✈️", tag: tripTag(p.name), budget: 0, currency: null, fx_rate: null, separate_budget: false, archived: false, created_at: nowIso(), ...p };
+}
+
+export function saveTrip(t: Trip) {
+  commit([up("trips", t)]);
+}
+
+/** Delete a trip; its spends keep their tag. */
+export const deleteTrip = (id: string) => commit([del("trips", id)]);
+
+// ---------------- daily habit ----------------
+
+/** Close (review) a day: snapshots its spend vs allowance for streaks and badges. */
+export function closeDay(date: string, spent: number, allowance: number, mood: string | null, note: string | null) {
+  commit([up("day_logs", { id: date, date, mood, note, spent: round2(spent), allowance: round2(allowance), closed_at: nowIso() })]);
+}
+
+export const reopenDay = (date: string) => commit([del("day_logs", date)]);
 
 // ---------------- notifications ----------------
 

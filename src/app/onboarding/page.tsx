@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button, Field, Input, Segmented, Select, Toggle } from "@/components/ui";
 import { ordinal } from "@/lib/domain/cycle";
 import { formatINR, parseAmount } from "@/lib/domain/money";
 import { PROFILE_ID } from "@/lib/store/actions";
 import { completeOnboarding, loadDemo, type OnboardingInput, suggestedBudgets } from "@/lib/store/setup";
 import { hashPin } from "@/lib/security";
+import { useStore } from "@/lib/store/store";
 
 const STEPS = ["Welcome", "Salary", "Bank", "Card", "Rent & bills", "Budgets"];
 const DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -22,6 +23,11 @@ const BILL_PRESETS: OnboardingInput["bills"] = [
 
 export default function Onboarding() {
   const router = useRouter();
+  const onboarded = useStore((s) => s.data.profiles[0]?.onboarded ?? false);
+  // Already set up: setup again would duplicate accounts, so go home instead.
+  useEffect(() => {
+    if (onboarded) router.replace("/");
+  }, [onboarded, router]);
   const [step, setStep] = useState(0);
   const [name, setName] = useState("Deep");
   const [pin, setPin] = useState("");
@@ -76,17 +82,33 @@ export default function Onboarding() {
 
   return (
     <div className="mx-auto min-h-dvh max-w-lg px-4 py-6">
-      <div className="mb-6 flex gap-1" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
+      <div className="mb-2 flex gap-1" aria-label={`Step ${step + 1} of ${STEPS.length}`}>
         {STEPS.map((s, i) => (
-          <div key={s} className={`h-1 flex-1 rounded-full ${i <= step ? "bg-accent" : "bg-surface-3"}`} />
+          <div key={s} className={`h-1.5 flex-1 rounded-full transition-colors ${i <= step ? "bg-accent" : "bg-surface-3"}`} />
         ))}
       </div>
+      <p className="mb-6 text-xs font-medium text-muted">Step {step + 1} of {STEPS.length} · {STEPS[step]}</p>
 
       {step === 0 && (
         <section>
-          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-3xl font-bold text-accent-ink">₹</div>
+          <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-3xl font-bold text-accent-ink shadow-[0_10px_30px_-8px_var(--accent)]">₹</div>
           <h1 className="text-3xl font-bold tracking-tight">Paisa OS</h1>
           <p className="mt-2 text-muted">One number, any moment: how much you can still safely spend this month — after UPI, cards, rent, IPO blocks and friends.</p>
+          <div className="mt-5 space-y-2">
+            {[
+              ["🎯", "Know what's safe to spend today", "Rent, bills, card dues and goals are set aside first."],
+              ["⚡", "Log a spend in two taps", "Type “120 chai upi”, paste a bank SMS, or repeat a regular."],
+              ["🔥", "A 10-second evening check-in", "Close the day, keep your streak, watch the month stay on track."],
+            ].map(([icon, title, body]) => (
+              <div key={title} className="flex items-start gap-3 rounded-2xl border border-line bg-surface p-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-2 text-lg" aria-hidden>{icon}</span>
+                <span>
+                  <span className="block text-sm font-semibold">{title}</span>
+                  <span className="block text-xs text-muted">{body}</span>
+                </span>
+              </div>
+            ))}
+          </div>
           <div className="mt-6">
             <Field label="Your name"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
             <Field label="4-digit app PIN (optional)" hint="Locks the app after 5 minutes idle. You can add biometrics later in Settings.">
@@ -185,9 +207,9 @@ export default function Onboarding() {
               <Field label="Deposit held (₹)"><Input inputMode="decimal" value={rent.deposit} onChange={(e) => setRent({ ...rent, deposit: e.target.value })} /></Field>
             </div>
           )}
-          <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wider text-muted">Bills & subscriptions</p>
+          <p className="mb-2 mt-5 text-sm font-semibold">Bills & subscriptions</p>
           {BILL_PRESETS.map((b) => (
-            <div key={b.name} className="mb-2 flex items-center gap-2 rounded-xl border border-line bg-surface p-2">
+            <div key={b.name} className="mb-2 flex items-center gap-2 rounded-2xl border border-line bg-surface p-2">
               <input type="checkbox" className="h-5 w-5 accent-[var(--accent)]" checked={bills[b.name].on} onChange={(e) => setBills({ ...bills, [b.name]: { ...bills[b.name], on: e.target.checked } })} aria-label={b.name} />
               <span className="flex-1 text-sm">{b.name}{b.variable && <span className="text-xs text-muted"> · varies</span>}</span>
               <Input className="h-9 w-24" inputMode="decimal" value={bills[b.name].amount} onChange={(e) => setBills({ ...bills, [b.name]: { ...bills[b.name], amount: e.target.value } })} aria-label={`${b.name} amount`} />
@@ -212,12 +234,12 @@ export default function Onboarding() {
         </section>
       )}
 
-      <div className="mt-8 flex gap-2">
+      <div className="sticky bottom-0 -mx-4 mt-8 flex gap-2 bg-bg/90 px-4 pb-[max(env(safe-area-inset-bottom),16px)] pt-3 backdrop-blur">
         {step > 0 && <Button onClick={() => setStep(step - 1)}>Back</Button>}
         {step < STEPS.length - 1 ? (
-          <Button variant="primary" className="flex-1" disabled={!canNext} onClick={() => setStep(step + 1)}>Continue</Button>
+          <Button variant="primary" size="lg" className="flex-1" disabled={!canNext} onClick={() => setStep(step + 1)}>Continue</Button>
         ) : (
-          <Button variant="primary" className="flex-1" onClick={finish}>See my Safe-to-Spend →</Button>
+          <Button variant="primary" size="lg" className="flex-1" onClick={finish}>See my Safe-to-Spend →</Button>
         )}
       </div>
       {finishError && <p className="mt-3 text-sm text-bad" role="alert">Couldn&apos;t finish setup: {finishError}</p>}

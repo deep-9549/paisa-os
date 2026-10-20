@@ -136,3 +136,10 @@ export function refundableLeft(orig: Transaction, txns: Transaction[]): number {
   const refunded = sum(txns.filter((t) => isLive(t) && t.type === "refund" && t.refund_of === orig.id).map((t) => t.amount));
   return round2(orig.amount - refunded);
 }
+
+/** Income filed under a "Salary" income category counts as salary landing. */
+export function isSalaryIncome(t: Pick<Transaction, "type" | "category_id">, categories: { id: string; name: string; kind: string }[]): boolean {
+  if (t.type !== "income" || !t.category_id) return false;
+  const c = categories.find((x) => x.id === t.category_id);
+  return !!c && c.kind === "income" && c.name.trim().toLowerCase() === "salary";
+}

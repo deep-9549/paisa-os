@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useStore } from "@/lib/store/store";
 import { IpoForm } from "./IpoForm";
@@ -21,9 +22,14 @@ export function QuickAddSheet() {
       ) : (
         <>
           <TxnForm key={`${q.text ?? ""}-${q.mode ?? ""}`} presetText={q.text} mode={(q.mode as "expense") ?? "expense"} onDone={close} />
-          <button className="mt-3 min-h-11 w-full text-sm text-muted hover:text-ink" onClick={() => setIpo(true)}>
-            🚀 Applying for an IPO instead?
-          </button>
+          <div className="mt-2 flex">
+            <Link href="/catch-up" onClick={close} className="flex min-h-11 flex-1 items-center justify-center text-sm text-muted hover:text-ink">
+              📩 Several SMS to log?
+            </Link>
+            <button className="min-h-11 flex-1 text-sm text-muted hover:text-ink" onClick={() => setIpo(true)}>
+              🚀 Applying for an IPO?
+            </button>
+          </div>
         </>
       )}
     </Sheet>

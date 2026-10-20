@@ -2,39 +2,49 @@
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-/* Dark is the default theme; light is optional (PRD section 6). */
+/* Dark is the default theme; light and "follow the system" are optional. */
 :root,
 :root[data-theme="dark"] {
-  --bg: #0b0d12;
-  --surface: #12151d;
-  --surface-2: #1a1e29;
-  --surface-3: #232838;
-  --border: #262b3a;
-  --text: #e8eaf0;
-  --muted: #8b92a7;
-  --accent: #7c8cff;
-  --accent-ink: #0b0d12;
-  --good: #34d399;
+  --bg: #08090d;
+  --surface: #111319;
+  --surface-2: #181b23;
+  --surface-3: #22262f;
+  --border: #23262f;
+  --text: #f1f2f6;
+  --muted: #8e93a4;
+  --accent: #8b7bff;
+  --accent-2: #5ee6c2;
+  --accent-ink: #0a0a12;
+  --good: #3ddc97;
   --warn: #fbbf24;
-  --bad: #f87171;
+  --bad: #ff6b6b;
   --info: #60a5fa;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 8px 24px -12px rgb(0 0 0 / 0.6);
+  --hero-from: #2b2160;
+  --hero-via: #1a1838;
+  --hero-to: #0f1a24;
   color-scheme: dark;
 }
 
 :root[data-theme="light"] {
-  --bg: #f5f6fa;
+  --bg: #f4f5f9;
   --surface: #ffffff;
-  --surface-2: #f0f2f7;
-  --surface-3: #e4e7ef;
-  --border: #dde1ea;
-  --text: #141824;
-  --muted: #5d6478;
-  --accent: #4f5fe8;
+  --surface-2: #f1f2f7;
+  --surface-3: #e6e8f0;
+  --border: #e3e5ec;
+  --text: #12141c;
+  --muted: #5f6577;
+  --accent: #5b4cf0;
+  --accent-2: #0fa07c;
   --accent-ink: #ffffff;
-  --good: #059669;
+  --good: #0a9a62;
   --warn: #b45309;
-  --bad: #dc2626;
+  --bad: #dc2f2f;
   --info: #2563eb;
+  --shadow: 0 1px 2px rgb(16 18 30 / 0.04), 0 8px 24px -16px rgb(16 18 30 / 0.18);
+  --hero-from: #ece9ff;
+  --hero-via: #f3f1ff;
+  --hero-to: #e6f8f2;
   color-scheme: light;
 }
 
@@ -47,6 +57,7 @@
   --color-ink: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
   --color-accent-ink: var(--accent-ink);
   --color-good: var(--good);
   --color-warn: var(--warn);
@@ -54,6 +65,7 @@
   --color-info: var(--info);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --shadow-card: var(--shadow);
 }
 
 html,
@@ -70,6 +82,20 @@ body {
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* The big numbers: tight tracking, tabular digits. */
+.display {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+}
+
+.hero {
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 60%),
+    radial-gradient(90% 80% at 100% 100%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 60%),
+    linear-gradient(160deg, var(--hero-from), var(--hero-via) 55%, var(--hero-to));
 }
 
 /* Privacy mode: blur every amount, one tap on the header eye toggles it. */
@@ -105,15 +131,76 @@ body {
     opacity: 1;
   }
 }
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-8px);
+  }
+  40%,
+  80% {
+    transform: translateX(8px);
+  }
+}
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
 .animate-sheet {
-  animation: sheet-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheet-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .animate-fade {
   animation: fade-in 0.15s ease-out;
 }
+.animate-rise {
+  animation: rise-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.animate-pop {
+  animation: pop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
 
-input[type="date"]::-webkit-calendar-picker-indicator {
+@media (prefers-reduced-motion: reduce) {
+  .animate-sheet,
+  .animate-fade,
+  .animate-rise,
+  .animate-shake,
+  .animate-pop {
+    animation: none;
+  }
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
   filter: invert(0.6);
+}
+:root[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator,
+:root[data-theme="light"] input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: none;
 }
 
 @media print {

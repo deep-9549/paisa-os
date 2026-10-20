@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { Hold, IpoApplication, RecurringRule } from "../../types";
-import { paceStatus } from "../budgets";
+import { paceStatus, suggestBudget, typicalSpend } from "../budgets";
 import { billEffect, computeSplit, friendBalances, simplifyDebts, upiPayLink } from "../friends";
 import { goalReserve, plannedMonthly, roundUp } from "../goals";
 import { blockedAmount, listingGainPct, realisedPnl, releaseOnAllotment, taxEstimate } from "../ipo";
-import { parseQuickAdd } from "../parser";
-import { expectedAmount, occurrences } from "../recurring";
+import { normalizeSpoken, parseQuickAdd } from "../parser";
+import { detectRecurring, expectedAmount, occurrences, priceChanges } from "../recurring";
 import { computeSafeToSpend } from "../safeToSpend";
-import { parseBankSms } from "../sms";
+import { isTransactionSms, likelyLogged, parseBankSms, splitSmsBatch } from "../sms";
 import { acct, txn } from "./fixtures";
 
 const rule = (over: Partial<RecurringRule> = {}): RecurringRule => ({
@@ -168,6 +168,18 @@ describe("Safe-to-Spend", () => {
     expect(r.investments).toBe(5000);
     expect(r.spent).toBe(0);
   });
+  it("caps at real cash until salary is recorded (mid-month setup)", () => {
+    const poor = acct({ opening_balance: 20000, opening_date: "2026-10-19" });
+    const rent = rule({ due_day: 25 });
+    const r = computeSafeToSpend({ ...base, accounts: [poor], transactions: [], rules: [rent], holds: [] });
+    expect(r.expectedSalary).toBe(80000);
+    expect(r.cappedByCash).toBe(true);
+    expect(r.month).toBe(20000 - 15000);
+    const savings = acct({ opening_balance: 200000, opening_date: "2026-09-01" });
+    const rich = computeSafeToSpend({ ...base, accounts: [savings], transactions: [], rules: [rent], holds: [] });
+    expect(rich.cappedByCash).toBe(false);
+    expect(rich.month).toBe(80000 - 15000 - 4000);
+  });
   it("daily allowance never shown below zero", () => {
     const big = txn({ amount: 200000, account_id: bank.id, date: "2026-10-19" });
     const r = computeSafeToSpend({ ...base, transactions: [big], rules: [], holds: [] });
@@ -236,5 +248,97 @@ describe("bank SMS parser", () => {
   it("salary credit", () => {
     const d = parseBankSms("Your A/c XX1234 is credited with Rs.80,000.00 on 01-10-2026 by NEFT from ACME TECHNOLOGIES. Avl Bal Rs.95,000");
     expect(d).toMatchObject({ amount: 80000, direction: "credit", method: "netbanking" });
+  });
+});
+
+describe("recurring detection", () => {
+  it("finds an untracked monthly subscription", () => {
+    const mk = (date: string, amount = 649, merchant = "Spotify") => txn({ date, amount, merchant });
+    const txns = [mk("2026-07-05"), mk("2026-08-05"), mk("2026-09-05"), mk("2026-10-05"), mk("2026-10-01", 120, "Chai"), mk("2026-10-02", 900, "Chai"), mk("2026-10-09", 40, "Chai")];
+    const c = detectRecurring(txns, [], "2026-10-19");
+    expect(c).toHaveLength(1);
+    expect(c[0]).toMatchObject({ merchant: "Spotify", frequency: "monthly", dueDay: 5, amount: 649, kind: "subscription" });
+  });
+  it("ignores ones already tracked or stopped", () => {
+    const mk = (date: string) => txn({ date, amount: 199, merchant: "Netflix" });
+    const txns = [mk("2026-04-05"), mk("2026-05-05"), mk("2026-06-05")];
+    expect(detectRecurring(txns, [], "2026-10-19")).toHaveLength(0);
+    const live = [mk("2026-08-05"), mk("2026-09-05"), mk("2026-10-05")];
+    expect(detectRecurring(live, [{ name: "Netflix" } as never], "2026-10-19")).toHaveLength(0);
+  });
+});
+
+describe("budget suggestions", () => {
+  const cats = [
+    { id: "food", name: "Food", parent_id: null, icon: "", color: "", kind: "expense" as const },
+    { id: "deliv", name: "Delivery", parent_id: "food", icon: "", color: "", kind: "expense" as const },
+  ];
+  const cycles = [
+    { start: "2026-07-01", end: "2026-07-31", length: 31 },
+    { start: "2026-08-01", end: "2026-08-31", length: 31 },
+    { start: "2026-09-01", end: "2026-09-30", length: 30 },
+  ];
+  it("averages only months with data and rolls children up", () => {
+    const t = typicalSpend([txn({ date: "2026-08-03", amount: 3000, category_id: "deliv" }), txn({ date: "2026-09-03", amount: 5000, category_id: "food" })], cats, cycles);
+    expect(t.get("food")).toBe(4000);
+    expect(t.get("deliv")).toBe(1500);
+  });
+  it("rounds suggestions up to friendly numbers", () => {
+    expect(suggestBudget(4012)).toBe(4100);
+    expect(suggestBudget(7210)).toBe(7500);
+    expect(suggestBudget(0)).toBe(0);
+  });
+});
+
+describe("voice quick-add", () => {
+  it("normalises spoken amounts", () => {
+    expect(normalizeSpoken("450 rupees Swiggy on card")).toBe("450 swiggy on card");
+    expect(normalizeSpoken("2 thousand rent")).toBe("2000 rent");
+    expect(normalizeSpoken("1.5 lakh bonus income")).toBe("150000 bonus income");
+    expect(normalizeSpoken("₹1,200 dinner split Rahul")).toBe("1200 dinner split rahul");
+    expect(normalizeSpoken("two hundred auto cash")).toBe("200 auto cash");
+  });
+  it("feeds the normal parser", () => {
+    const p = parseQuickAdd(normalizeSpoken("Rs 80 chai yesterday"));
+    expect(p).toMatchObject({ amount: 80, daysAgo: 1, categoryPath: "Food › Tea & snacks" });
+  });
+});
+
+describe("bulk SMS", () => {
+  const a = "Rs.450.00 debited from A/c XX1234 on 18-10-26 to VPA swiggy@icici UPI Ref 123456789. -Bank of India";
+  const b = "INR 1,200 spent on BOI RuPay Credit Card XX4821 at AMAZON on 17-Oct-26. Avl limit Rs 1,20,000";
+  const otp = "123456 is your OTP for txn of Rs 500 at Flipkart. Do not share.";
+  it("splits on blank lines and on money lines", () => {
+    expect(splitSmsBatch(`${a}\n\n${b}\n\n${otp}`)).toEqual([a, b]);
+    expect(splitSmsBatch(`${a}\n${b}`)).toEqual([a, b]);
+  });
+  it("joins a message wrapped over lines", () => {
+    expect(splitSmsBatch("Rs.450.00 debited from A/c XX1234\non 18-10-26 to VPA swiggy@icici")).toEqual(["Rs.450.00 debited from A/c XX1234 on 18-10-26 to VPA swiggy@icici"]);
+  });
+  it("spots messages already logged", () => {
+    const istOf = (ts: string) => ts.slice(0, 10);
+    const logged = [txn({ amount: 450, date: "2026-10-18" })];
+    expect(likelyLogged({ amount: 450, direction: "debit", date: "2026-10-18" }, logged, istOf)).toBe(true);
+    expect(likelyLogged({ amount: 450, direction: "debit", date: "2026-10-21" }, logged, istOf)).toBe(false);
+    expect(likelyLogged({ amount: 450, direction: "credit", date: "2026-10-18" }, logged, istOf)).toBe(false);
+    expect(likelyLogged({ amount: 451, direction: "debit", date: "2026-10-18" }, logged, istOf)).toBe(false);
+  });
+  it("ignores OTPs and non-money messages", () => {
+    expect(isTransactionSms(otp)).toBe(false);
+    expect(isTransactionSms("Your statement is ready")).toBe(false);
+  });
+});
+
+describe("price changes", () => {
+  it("flags a subscription that went up", () => {
+    const r = rule({ id: "nf", name: "Netflix", kind: "subscription", amount: 499 });
+    const txns = [txn({ date: "2026-08-22", amount: 499, recurring_rule_id: "nf" }), txn({ date: "2026-09-22", amount: 499, recurring_rule_id: "nf" }), txn({ date: "2026-10-22", amount: 649, recurring_rule_id: "nf" })];
+    expect(priceChanges([r], txns)).toEqual([expect.objectContaining({ from: 499, to: 649, date: "2026-10-22" })]);
+  });
+  it("ignores variable bills and small moves", () => {
+    const v = rule({ id: "el", amount_min: 800, amount_max: 2000 });
+    const f = rule({ id: "wifi", amount: 799 });
+    const txns = [txn({ date: "2026-09-10", amount: 900, recurring_rule_id: "el" }), txn({ date: "2026-10-10", amount: 1500, recurring_rule_id: "el" }), txn({ date: "2026-09-10", amount: 799, recurring_rule_id: "wifi" }), txn({ date: "2026-10-10", amount: 810, recurring_rule_id: "wifi" })];
+    expect(priceChanges([v, f], txns)).toEqual([]);
   });
 });

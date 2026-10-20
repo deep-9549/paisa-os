@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { SpottedCard, useSpotted } from "@/components/Spotted";
 import { PLAN_TABS, SubTabs } from "@/components/PlanTabs";
 import { Amount, Badge, Button, Card, Empty, Field, Input, PageHeader, Row, SectionTitle, Segmented, Select, Sheet, Toggle } from "@/components/ui";
 import { ordinal } from "@/lib/domain/cycle";
-import { addDays, fmtDate, istDate, relativeDay } from "@/lib/domain/dates";
+import { addDays, dayHeading, fmtDate, istDate } from "@/lib/domain/dates";
 import { formatINR, parseAmount } from "@/lib/domain/money";
 import { expectedAmount, isVariable, nextOccurrence, occurrencesInRange, postedFor, yearlyCost } from "@/lib/domain/recurring";
 import { fyRange } from "@/lib/domain/tax";
@@ -20,6 +21,7 @@ export default function RecurringPage() {
   const today = useToday();
   const [tab, setTab] = useState<"upcoming" | "all" | "subs" | "rent">("upcoming");
   const [edit, setEdit] = useState<RecurringRule | "new" | null>(null);
+  const [spotted, dismiss] = useSpotted();
   const upcoming = useMemo(() => occurrencesInRange(d.recurring_rules, d.transactions, addDays(today, -10), addDays(today, 35)), [d, today]);
   const subs = d.recurring_rules.filter((r) => r.kind === "subscription");
   const rents = d.recurring_rules.filter((r) => r.kind === "rent");
@@ -31,12 +33,18 @@ export default function RecurringPage() {
       <SubTabs tabs={PLAN_TABS} />
       <Segmented value={tab} onChange={setTab} options={[{ value: "upcoming", label: "Upcoming" }, { value: "all", label: "All rules" }, { value: "subs", label: "Subscriptions" }, { value: "rent", label: "Rent" }]} />
 
+      {spotted.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {spotted.slice(0, 3).map((c) => <SpottedCard key={c.merchant} c={c} onDismiss={() => dismiss(c.merchant)} />)}
+        </div>
+      )}
+
       {tab === "upcoming" && (
         <div className="mt-4">
           {upcoming.length === 0 && <Empty icon="🗓️" title="Nothing scheduled" body="Add rent, bills and subscriptions so they're reserved on salary day." />}
           {groupByDate(upcoming).map(([date, list]) => (
             <div key={date} className="mb-2">
-              <p className="px-2 py-1 text-xs font-semibold text-muted">{relativeDay(date, today)} · {fmtDate(date)}</p>
+              <p className="px-2 py-1 text-xs font-semibold text-muted">{dayHeading(date, today)}</p>
               <Card className="p-1">
                 {list.map((o) => (
                   <Row

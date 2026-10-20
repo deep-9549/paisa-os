@@ -6,7 +6,7 @@ import { Amount, Badge, Button, Card, Field, Input, PageHeader, Row, SectionTitl
 import { describeSetting, getCycle, ordinal } from "@/lib/domain/cycle";
 import { istDate } from "@/lib/domain/dates";
 import { formatINR, parseAmount } from "@/lib/domain/money";
-import { type CsvMapping, type CsvPreviewRow, commitCsv, deleteAll, download, exportJson, guessMapping, importJson, parseCsv, previewCsv, transactionsCsv } from "@/lib/data";
+import { type CsvMapping, type CsvPreviewRow, backupNow, commitCsv, deleteAll, download, guessMapping, lastBackupAt, importJson, parseCsv, previewCsv, transactionsCsv } from "@/lib/data";
 import {
   categoryPath, deleteCategory, deleteRuleEngine, deleteTemplate, deleteUpiHandle, getProfile, iconFor, newAccount, reconcileAccount,
   saveAccount, saveCategory, saveRuleEngine, saveTemplate, saveUpiHandle, setCycleSetting, updateProfile,
@@ -86,7 +86,7 @@ export default function SettingsPage() {
 
       <SectionTitle>Appearance</SectionTitle>
       <Card>
-        <Segmented value={p.theme} onChange={(v) => updateProfile({ theme: v })} options={[{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
+        <Segmented value={p.theme} onChange={(v) => updateProfile({ theme: v })} options={[{ value: "system", label: "Auto" }, { value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
       </Card>
 
       <SectionTitle>Sync</SectionTitle>
@@ -108,7 +108,7 @@ export default function SettingsPage() {
       <SectionTitle>Data</SectionTitle>
       <Card className="p-1">
         <Row onClick={() => download(`paisa-os-transactions-${istDate()}.csv`, transactionsCsv(), "text/csv")} left="📄" title="Export transactions (CSV)" />
-        <Row onClick={() => download(`paisa-os-backup-${istDate()}.json`, exportJson(), "application/json")} left="💾" title="Full backup (JSON)" />
+        <Row onClick={() => backupNow(istDate())} left="💾" title="Full backup (JSON)" sub={lastBackupAt() ? `Last saved ${new Date(lastBackupAt()!).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}` : "Never saved on this device"} />
         <Row onClick={() => setSheet("import")} left="📥" title="Restore from JSON backup" />
         <Row onClick={() => setSheet("csv")} left="🏦" title="Import bank / card statement CSV" sub="Column mapping + duplicate check" />
         <Row href="/tax" left="🧾" title="Tax helper" sub="Rent for HRA, IPO capital gains, 80C" />
@@ -153,7 +153,7 @@ function NotificationSettings() {
           <Button size="sm" onClick={async () => { const r = await Notification.requestPermission(); setPerm(r); if (r === "granted") subscribePush(); }}>Enable</Button>
         )}
       </div>
-      <Toggle checked={p.notify_daily_nudge} onChange={(v) => updateProfile({ notify_daily_nudge: v })} label="Daily 9 PM “log today's spends?” nudge" />
+      <Toggle checked={p.notify_daily_nudge} onChange={(v) => updateProfile({ notify_daily_nudge: v })} label="Daily reminders: morning brief + 9 PM close-the-day" />
       <Toggle checked={p.notify_weekly} onChange={(v) => updateProfile({ notify_weekly: v })} label="Weekly summary on Sunday" />
       <Toggle checked={p.email_digest} onChange={(v) => updateProfile({ email_digest: v })} label="Email digest (needs Supabase + Resend)" />
       <Field label="Remind me of friend balances older than (days)"><Input inputMode="numeric" defaultValue={p.friend_reminder_days} onBlur={(e) => updateProfile({ friend_reminder_days: parseInt(e.target.value) || 14 })} /></Field>

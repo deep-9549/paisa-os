@@ -108,3 +108,103 @@ test("F4/F7: demo data renders every main screen", async ({ page }) => {
     await page.screenshot({ path: `e2e/screenshots/${path.slice(1).replace(/\//g, "-")}.png`, fullPage: true });
   }
 });
+
+test("Habit: close the day and see the streak", async ({ page }) => {
+  await onboard(page);
+  await quickAdd(page, "60 chai upi");
+  await page.getByRole("button", { name: /^Save ₹60/ }).click();
+  await page.getByRole("button", { name: "Review" }).click();
+  await page.getByRole("button", { name: /Calm/ }).click();
+  await page.getByRole("button", { name: "Close the day" }).click();
+  await expect(page.getByText("1-day streak", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByText("Today is closed")).toBeVisible();
+  await reload(page, "/review");
+  await expect(page.getByText("current streak · best 1")).toBeVisible();
+});
+
+test("Salary logged by hand counts as salary landing (no double income)", async ({ page }) => {
+  await onboard(page);
+  // Before: salary for this cycle isn't recorded, so the app says so.
+  await expect(page.getByText(/Salary not recorded this month|Counting on salary/)).toBeVisible();
+  await page.getByRole("button", { name: "Arrived" }).click();
+  await expect(page.getByLabel("Quick add")).toHaveValue("85000 salary");
+  await page.getByRole("button", { name: /^Save ₹85,000/ }).click();
+  await expect(page.getByText(/Salary not recorded this month|Counting on salary/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Show Safe-to-Spend breakdown" }).first().click();
+  // Income is the one salary, not salary + expected salary.
+  await expect(page.getByRole("link", { name: /^Income this cycle\s*85,000 rupees$/ })).toBeVisible();
+});
+
+test("Voice quick-add: speech becomes a parsed spend", async ({ page }) => {
+  // Headless browsers have no speech engine; stand in for one that hears a phrase.
+  await page.addInitScript(() => {
+    class FakeRecognition {
+      lang = "";
+      interimResults = false;
+      maxAlternatives = 1;
+      onresult: ((e: unknown) => void) | null = null;
+      onend: (() => void) | null = null;
+      onerror: ((e: unknown) => void) | null = null;
+      start() {
+        setTimeout(() => {
+          const r = Object.assign([{ transcript: "2 thousand rupees Myntra on card" }], { isFinal: true });
+          this.onresult?.({ results: [r] });
+          this.onend?.();
+        }, 50);
+      }
+      stop() {}
+    }
+    const w = window as unknown as { SpeechRecognition: unknown; webkitSpeechRecognition: unknown };
+    w.SpeechRecognition = FakeRecognition;
+    w.webkitSpeechRecognition = FakeRecognition;
+  });
+  await onboard(page);
+  await page.getByRole("button", { name: "Add transaction" }).first().click();
+  await page.getByRole("button", { name: "Say it" }).click();
+  await expect(page.getByLabel("Quick add")).toHaveValue("2000 myntra on card");
+  await expect(page.getByText("Shopping › Clothes").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Save ₹2,000/ })).toBeVisible();
+});
+
+test("Catch up: paste bank SMS, review, import", async ({ page }) => {
+  await onboard(page);
+  await quickAdd(page, "450 swiggy upi");
+  await page.getByRole("button", { name: /^Save ₹450/ }).click();
+  await reload(page, "/catch-up");
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()).split("-");
+  const dd = `${d}-${m}-${y.slice(2)}`;
+  await page.getByLabel("Bank SMS").fill(
+    `Rs.450.00 debited from A/c XX1234 on ${dd} to VPA swiggy@icici UPI Ref 123456789. -Bank of India\n\n` +
+      `INR 1,200 spent on BOI RuPay Credit Card XX4821 at AMAZON on ${dd}.\n\n` +
+      "123456 is your OTP for txn of Rs 999. Do not share.",
+  );
+  await expect(page.getByText("2 found · 1 to import")).toBeVisible(); // the Swiggy one looks already logged…
+  await expect(page.getByText("already logged?")).toBeVisible();
+  await page.getByRole("button", { name: "Import 1 transaction" }).click();
+  await expect(page).toHaveURL(/activity/);
+  // …the Amazon card swipe lands on the card matched by its last 4 digits.
+  await expect(page.getByRole("button", { name: /Amazon.*BOI RuPay Credit Card/ }).first()).toBeVisible();
+});
+
+test("Trip abroad: amounts in USD, tagged, outside the monthly budget", async ({ page }) => {
+  await onboard(page);
+  await reload(page, "/trips");
+  await page.getByRole("button", { name: "Plan a trip" }).click();
+  await page.getByPlaceholder("Goa with college gang").fill("Bali");
+  await page.getByPlaceholder("20,000").fill("50000");
+  await page.getByRole("switch", { name: /Trip abroad/ }).click();
+  await page.getByPlaceholder("83.2").fill("83");
+  await page.getByRole("button", { name: "Start planning" }).click();
+  await expect(page.getByText("✈️ Bali")).toBeVisible();
+  await reload(page, "/");
+  await quickAdd(page, "25 lunch");
+  await expect(page.getByText("= ₹2,075 at ₹83")).toBeVisible();
+  await page.getByRole("button", { name: /^Save ₹2,075/ }).click();
+  await expect(page.getByText(/Bali · day 1 of 4/)).toBeVisible();
+  await reload(page, "/trips");
+  await expect(page.getByText("₹47,925 left")).toBeVisible();
+  // Kept out of the monthly budget.
+  await reload(page, "/activity?type=expense");
+  await expect(page.getByText(/budget impact\s*₹0/)).toBeVisible();
+});

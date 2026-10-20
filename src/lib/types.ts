@@ -376,7 +376,7 @@ export interface Profile {
   pin_hash: string | null;
   webauthn_credential_id: string | null;
   lock_minutes: number;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "system";
   privacy_mode: boolean;
   onboarded: boolean;
   notify_daily_nudge: boolean;
@@ -395,6 +395,35 @@ export interface AuditEntry {
   action: "create" | "update" | "delete" | "restore";
   before: unknown;
   at: Timestamp;
+}
+
+/** A trip: a tag with a budget and dates; quick-add tags spends while it's active. */
+export interface Trip {
+  id: ID;
+  user_id?: string;
+  name: string;
+  emoji: string;
+  tag: string;
+  budget: number;
+  start_date: DateStr;
+  end_date: DateStr;
+  currency: string | null; // e.g. "USD" for trips abroad
+  fx_rate: number | null; // ₹ per unit of `currency`
+  separate_budget: boolean; // keep trip spends out of the monthly budget
+  archived: boolean;
+  created_at: Timestamp;
+}
+
+/** A day the user "closed": reviewed today's spends (drives streaks). */
+export interface DayLog {
+  id: ID; // the IST date
+  user_id?: string;
+  date: DateStr;
+  mood: string | null; // emoji
+  note: string | null;
+  spent: number; // budget spend that day, snapshotted at close
+  allowance: number; // daily allowance that day, snapshotted at close
+  closed_at: Timestamp;
 }
 
 export interface JobRun {
@@ -434,6 +463,8 @@ export interface Tables {
   notifications: AppNotification[];
   audit_log: AuditEntry[];
   job_runs: JobRun[];
+  day_logs: DayLog[];
+  trips: Trip[];
 }
 
 export type TableName = keyof Tables;
@@ -467,6 +498,8 @@ export const PRIMARY_KEY: Record<TableName, string> = {
   notifications: "id",
   audit_log: "id",
   job_runs: "id",
+  day_logs: "id",
+  trips: "id",
 };
 
 export const TABLE_NAMES = Object.keys(PRIMARY_KEY) as TableName[];

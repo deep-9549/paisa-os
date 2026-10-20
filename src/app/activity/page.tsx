@@ -1,15 +1,16 @@
 "use client";
 
+import { MessageSquareText, Search, SlidersHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { TxnDetailSheet } from "@/components/TxnDetail";
 import { groupByDay, TxnRow } from "@/components/TxnRow";
-import { Amount, Button, Chip, Empty, Input, PageHeader, Segmented, Select, Sheet, cn } from "@/components/ui";
-import { addDays, clampedDate, fmtDate, parseDate, relativeDay, toDateStr } from "@/lib/domain/dates";
-import { budgetImpact, txnDate } from "@/lib/domain/ledger";
+import { Amount, Button, Chip, Empty, Input, LinkButton, PageHeader, Segmented, Select, Sheet, cn } from "@/components/ui";
+import { addDays, clampedDate, dayHeading, fmtDate, fmtMonth, parseDate, toDateStr } from "@/lib/domain/dates";
+import { budgetImpact, isLive, spendInRange, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
 import { bulkUpdate, categoryPath, deleteTransactions } from "@/lib/store/actions";
-import { useData, useToday } from "@/lib/store/selectors";
+import { useCycle, useData, useToday } from "@/lib/store/selectors";
 import type { Transaction } from "@/lib/types";
 
 export default function ActivityPage() {
@@ -38,7 +39,7 @@ function Activity() {
   const [open, setOpen] = useState<Transaction | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [dayFilter, setDayFilter] = useState<string | null>(null);
+  const [dayFilter, setDayFilter] = useState<string | null>(params.get("day"));
 
   const catFamily = useMemo(() => {
     if (!category) return null;
@@ -67,6 +68,11 @@ function Activity() {
   const total = filtered.reduce((a, t) => a + budgetImpact(t), 0);
   const allTags = [...new Set(d.transactions.flatMap((t) => t.tags))];
   const activeFilters = [method, account, category, type, tag].filter(Boolean).length;
+  const filtering = activeFilters > 0 || !!q.trim() || !!dayFilter || show !== "live";
+  const cycle = useCycle();
+  const monthName = fmtMonth(cycle.start).split(" ")[0];
+  const monthOut = spendInRange(d.transactions, cycle.start, cycle.end);
+  const monthIn = d.transactions.filter((t) => isLive(t) && t.type === "income" && !t.exclude_from_budget && txnDate(t) >= cycle.start && txnDate(t) <= cycle.end).reduce((a, t) => a + t.amount, 0);
 
   const toggleSel = (id: string) => {
     const s = new Set(selected);
@@ -79,21 +85,37 @@ function Activity() {
     <div>
       <PageHeader
         title="Activity"
-        subtitle={<>{filtered.length} transactions · budget impact <Amount value={total} /></>}
+        subtitle={filtering ? <>{filtered.length} match{filtered.length === 1 ? "" : "es"} · budget impact <Amount value={total} /></> : `${filtered.length} transactions`}
         action={
           <>
+            {!selecting && <LinkButton href="/catch-up" className="h-9 rounded-xl px-3"><MessageSquareText size={15} aria-hidden /> Catch up</LinkButton>}
             <Button size="sm" variant={selecting ? "primary" : "secondary"} onClick={() => { setSelecting(!selecting); setSelected(new Set()); }}>
               {selecting ? "Done" : "Select"}
             </Button>
           </>
         }
       />
+      {!filtering && (
+        <div className="mb-4 grid grid-cols-3 gap-2">
+          <MonthStat label={`Spent in ${monthName}`} value={monthOut} />
+          <MonthStat label="Income" value={monthIn} tone="good" />
+          <MonthStat label="Saved" value={monthIn - monthOut} tone={monthIn - monthOut >= 0 ? "good" : "bad"} />
+        </div>
+      )}
       <div className="flex gap-2">
-        <Input placeholder="Search merchant, note, amount, #tag…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search transactions" />
-        <Button onClick={() => setFiltersOpen(true)} aria-label="Filters">⚙︎{activeFilters ? ` ${activeFilters}` : ""}</Button>
+        <div className="relative flex-1">
+          <Search size={17} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+          <Input placeholder="Search merchant, note, amount, #tag…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search transactions" autoFocus={params.get("focus") === "1"} type="search" className="pl-10" />
+        </div>
+        <Button onClick={() => setFiltersOpen(true)} aria-label="Filters" className={cn("h-12 w-12 px-0", activeFilters > 0 && "border-accent text-accent")}>
+          <SlidersHorizontal size={18} aria-hidden />
+          {activeFilters ? <span className="-ml-1 text-xs">{activeFilters}</span> : null}
+        </Button>
       </div>
-      <div className="mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar">
-        <Segmented size="sm" value={view} onChange={(v) => setView(v)} options={[{ value: "list", label: "List" }, { value: "calendar", label: "Calendar" }]} />
+      <div className="-mx-4 mt-3 flex items-center gap-2 overflow-x-auto px-4 no-scrollbar">
+        <div className="shrink-0">
+          <Segmented size="sm" value={view} onChange={(v) => setView(v)} options={[{ value: "list", label: "List" }, { value: "calendar", label: "Calendar" }]} />
+        </div>
         <Chip active={show === "drafts"} onClick={() => setShow(show === "drafts" ? "live" : "drafts")}>To confirm</Chip>
         <Chip active={show === "trash"} onClick={() => setShow(show === "trash" ? "live" : "trash")}>Trash</Chip>
         {["upi", "card", "cash"].map((m) => (
@@ -106,14 +128,14 @@ function Activity() {
 
       {view === "list" && (
         <div className="mt-4">
-          {groups.length === 0 && <Empty icon="🔍" title={show === "trash" ? "Trash is empty" : "No transactions"} body={show === "trash" ? "Deleted items stay here for 30 days." : "Try clearing filters or add one with +."} />}
+          {groups.length === 0 && <Empty icon={<Search />} title={show === "trash" ? "Trash is empty" : "No transactions"} body={show === "trash" ? "Deleted items stay here for 30 days." : "Try clearing filters or add one with +."} />}
           {groups.map(([day, list]) => (
             <section key={day} className="mb-3">
-              <div className="sticky top-0 z-10 flex justify-between bg-bg/95 px-2 py-1.5 text-xs font-semibold text-muted backdrop-blur">
-                <span>{relativeDay(day, today)} · {fmtDate(day)}</span>
+              <div className="sticky top-0 z-10 -mx-1 flex justify-between bg-bg/90 px-3 py-2 text-xs font-semibold text-muted backdrop-blur">
+                <span>{dayHeading(day, today)}</span>
                 <Amount value={-list.reduce((a, t) => a + budgetImpact(t), 0)} />
               </div>
-              <div className="rounded-2xl border border-line bg-surface p-1">
+              <div className="rounded-3xl border border-line bg-surface p-1 shadow-card">
                 {list.map((t) => (
                   <TxnRow key={t.id} t={t} selectable={selecting} selected={selected.has(t.id)} onClick={() => (selecting ? toggleSel(t.id) : setOpen(t))} />
                 ))}
@@ -248,6 +270,17 @@ function CalendarView({ txns, today, onPick }: { txns: Transaction[]; today: str
           ),
         )}
       </div>
+    </div>
+  );
+}
+
+function MonthStat({ label, value, tone }: { label: string; value: number; tone?: "good" | "bad" }) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-3 shadow-card">
+      <p className="truncate text-[11px] text-muted">{label}</p>
+      <p className={cn("mt-0.5 truncate text-[15px] font-bold tabular", tone === "good" && "text-good", tone === "bad" && "text-bad")}>
+        <Amount value={value} />
+      </p>
     </div>
   );
 }

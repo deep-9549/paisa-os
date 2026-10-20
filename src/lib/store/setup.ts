@@ -224,6 +224,10 @@ export function loadDemo() {
   base.budget_lines = [
     ["Food", 9000], ["Transport", 3500], ["Shopping", 5000], ["Entertainment", 3000], ["Bills & Utilities", 3500],
   ].map(([p, a]) => ({ id: uid(), category_id: cat(p as string)!, amount: a as number, rollover: p === "Food" }));
+  base.trips = [{
+    id: uid(), name: "Goa with the gang", emoji: "🏖️", tag: "goa", budget: 30000, start_date: addDays(today, 24), end_date: addDays(today, 28),
+    currency: null, fx_rate: null, separate_budget: true, archived: false, created_at: new Date().toISOString(),
+  }];
   base.goals = [
     newGoal({ name: "Goa trip", target: 30000, target_date: addDays(today, 100), emoji: "🏖️", roundup_to: 10 }),
     newGoal({ name: "Emergency fund", kind: "emergency", target: 300000, emoji: "🛟" }),
@@ -234,6 +238,13 @@ export function loadDemo() {
     { id: uid(), label: "Chai", text: "20 chai upi", emoji: "☕" },
     { id: uid(), label: "Fuel", text: "500 petrol upi", emoji: "⛽" },
   ];
+  // Habit history: the last 11 days closed (yesterday back), with a few moods.
+  const moods = ["😌", "🙂", "🎉", "😬", null];
+  base.day_logs = Array.from({ length: 11 }, (_, i) => {
+    const date = addDays(today, -(i + 1));
+    const spent = tx.filter((t) => !t.exclude_from_budget && t.type === "expense" && istDate(t.occurred_at) === date).reduce((a, t) => a + (t.my_share ?? t.amount), 0);
+    return { id: date, date, mood: moods[i % moods.length], note: null, spent, allowance: 1100, closed_at: dateToTs(date, "22:00") };
+  });
   base.profiles = [{
     ...defaultProfile(), name: "Deep", salary: 85000, onboarded: true, default_account_id: bank.id, my_upi_id: "deep@boi",
     cycle_history: [{ effective_from: "2000-01-01", mode: "calendar", start_day: 1 }],

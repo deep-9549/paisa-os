@@ -88,3 +88,43 @@ export function parseBankSms(text: string): SmsDraft | null {
     bank: /bank of india|\bboi\b/i.test(text) ? "Bank of India" : null,
   };
 }
+
+/** True for messages that move money (not OTPs, balance alerts or offers). */
+export function isTransactionSms(text: string): boolean {
+  const l = text.toLowerCase();
+  if (/\botp\b|one.time.password|verification code/.test(l)) return false;
+  return /(debited|credited|spent|withdrawn|purchase|paid|sent|received|txn of|transaction of)/.test(l) && /(?:rs\.?|inr|₹)\s*[\d,]+/.test(l);
+}
+
+/**
+ * Split a pasted batch into single messages: blank lines separate messages;
+ * a block with several money lines is split per line (copying from a list of
+ * SMS often loses the blank lines).
+ */
+export function splitSmsBatch(text: string): string[] {
+  const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+  const out: string[] = [];
+  for (const b of blocks) {
+    const lines = b.split("\n").map((l) => l.trim()).filter(Boolean);
+    const moneyLines = lines.filter(isTransactionSms);
+    if (moneyLines.length > 1) out.push(...moneyLines);
+    else out.push(lines.join(" "));
+  }
+  return out.filter(isTransactionSms);
+}
+
+/**
+ * Already logged? SMS dates have no time, so match on amount + direction
+ * within a day either side. Card swipes and UPI debits are expenses; credits
+ * are income or refunds.
+ */
+export function likelyLogged(s: Pick<SmsDraft, "amount" | "direction" | "date">, txns: { amount: number; type: string; occurred_at: string; deleted_at: string | null; my_share: number | null }[], istDateOf: (ts: string) => string): boolean {
+  if (!s.date) return false;
+  const types = s.direction === "debit" ? ["expense", "transfer", "card_payment"] : ["income", "refund", "transfer"];
+  return txns.some((t) => {
+    if (t.deleted_at || !types.includes(t.type) || Math.abs(t.amount - s.amount) > 0.009) return false;
+    const d = istDateOf(t.occurred_at);
+    const gap = Math.abs(Date.parse(`${d}T00:00:00Z`) - Date.parse(`${s.date}T00:00:00Z`)) / 864e5;
+    return gap <= 1;
+  });
+}

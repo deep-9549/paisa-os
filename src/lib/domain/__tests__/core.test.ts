@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { cardCycleFor, dueDateFor, emiSchedule, minimumDue, rewardRate, statementStatus, summariseCard, feeWaiverProgress } from "../cards";
 import { changeCycleSetting, getCycle } from "../cycle";
-import { accountBalance, budgetImpact, findDuplicate, spendInRange } from "../ledger";
-import { formatINR, parseAmount } from "../money";
+import { accountBalance, budgetImpact, findDuplicate, isSalaryIncome, spendInRange } from "../ledger";
+import { formatINR, groupTyping, parseAmount } from "../money";
 import { acct, card, txn } from "./fixtures";
 
 describe("money", () => {
@@ -19,6 +19,16 @@ describe("money", () => {
     expect(parseAmount("2L")).toBe(200000);
     expect(parseAmount("₹450.50")).toBe(450.5);
     expect(parseAmount("abc")).toBeNull();
+    expect(parseAmount("120+80")).toBe(200);
+    expect(parseAmount("1,200 + 1.5k")).toBe(2700);
+    expect(parseAmount("120+x")).toBeNull();
+  });
+  it("groups digits while typing", () => {
+    expect(groupTyping("120000")).toBe("1,20,000");
+    expect(groupTyping("1,2000.567")).toBe("12,000.56");
+    expect(groupTyping(".5")).toBe("0.5");
+    expect(groupTyping("120+80")).toBe("120+80");
+    expect(groupTyping("")).toBe("");
   });
 });
 
@@ -173,5 +183,20 @@ describe("card cycle rules", () => {
     const c = card(cc.id, { fee_waiver_spend: 50000, fee_anniversary: "2026-03-15" });
     const p = feeWaiverProgress(c, [txn({ amount: 12000, account_id: cc.id, date: "2026-05-01" })], "2026-10-19");
     expect(p).toMatchObject({ spent: 12000, remaining: 38000, deadline: "2027-03-14" });
+  });
+});
+
+describe("salary detection", () => {
+  const cats = [
+    { id: "sal", name: "Salary", kind: "income" },
+    { id: "free", name: "Freelance", kind: "income" },
+    { id: "x", name: "Salary", kind: "expense" },
+  ];
+  it("flags income in the Salary category only", () => {
+    expect(isSalaryIncome({ type: "income", category_id: "sal" }, cats)).toBe(true);
+    expect(isSalaryIncome({ type: "income", category_id: "free" }, cats)).toBe(false);
+    expect(isSalaryIncome({ type: "expense", category_id: "sal" }, cats)).toBe(false);
+    expect(isSalaryIncome({ type: "income", category_id: "x" }, cats)).toBe(false);
+    expect(isSalaryIncome({ type: "income", category_id: null }, cats)).toBe(false);
   });
 });

@@ -44,6 +44,8 @@ export interface SafeToSpend {
   spentToday: number;
   holds: number;
   month: number;
+  /** Month figure was limited to true cash because salary isn't recorded yet. */
+  cappedByCash: boolean;
   daysLeft: number;
   /** Daily allowance at the start of today (unused amounts roll into it). */
   dailyAllowance: number;
@@ -109,7 +111,21 @@ export function computeSafeToSpend(i: SafeToSpendInput): SafeToSpend {
   const spentToday = spendInRange(live, today, today);
   const holds = sum(i.holds.filter((h) => h.status === "active").map((h) => h.amount));
 
-  const month = round2(income - fixedCommitments - investments - reserve - buffer - spent - holds);
+  const liquid = sum(i.accounts.filter((a) => isLiquid(a) && !a.archived).map((a) => accountBalance(a, live, i.settlements)));
+  const cardOutstanding = sum(
+    i.accounts
+      .filter((a) => a.type === "credit_card" && !a.archived)
+      .map((a) => Math.max(-accountBalance(a, live, i.settlements), 0)),
+  );
+  const trueCash = round2(liquid - cardOutstanding - holds);
+
+  // Until this cycle's salary is recorded, never promise more than the money
+  // that actually exists. Without this, setting up mid-month (salary already
+  // landed but not logged) would count the whole salary as still to come.
+  const planned = round2(income - fixedCommitments - investments - reserve - buffer - spent - holds);
+  const cashCap = round2(trueCash - fixedCommitments);
+  const cappedByCash = expectedSalary > 0 && cashCap < planned;
+  const month = cappedByCash ? cashCap : planned;
   const dl = daysLeft(cycle, today);
   const startOfToday = month + spentToday;
   const dailyAllowance = round2((startOfToday - variableUpcoming) / dl);
@@ -120,13 +136,6 @@ export function computeSafeToSpend(i: SafeToSpendInput): SafeToSpend {
   const weekEnd = addDays(today, weekday === 0 ? 0 : 7 - weekday);
   const weekDays = Math.min(diffDays(weekEnd < cycle.end ? weekEnd : cycle.end, today) + 1, dl);
   const weekLeft = round2(Math.max(dailyAllowance * weekDays - spentToday, 0));
-
-  const liquid = sum(i.accounts.filter((a) => isLiquid(a) && !a.archived).map((a) => accountBalance(a, live, i.settlements)));
-  const cardOutstanding = sum(
-    i.accounts
-      .filter((a) => a.type === "credit_card" && !a.archived)
-      .map((a) => Math.max(-accountBalance(a, live, i.settlements), 0)),
-  );
 
   return {
     cycle,
@@ -149,7 +158,8 @@ export function computeSafeToSpend(i: SafeToSpendInput): SafeToSpend {
     todayLeft: Math.max(todayRaw, 0),
     todayOverBy: Math.max(-todayRaw, 0),
     weekLeft,
-    trueCash: round2(liquid - cardOutstanding - holds),
+    trueCash,
+    cappedByCash,
     liquid,
     cardOutstanding,
   };

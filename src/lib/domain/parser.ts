@@ -129,3 +129,22 @@ export function titleCase(s: string): string {
 }
 
 export const merchantKey = (m: string) => m.trim().toLowerCase().replace(/\s+/g, " ");
+
+const SPOKEN_UNITS: Record<string, number> = { thousand: 1e3, thousands: 1e3, k: 1e3, lakh: 1e5, lakhs: 1e5, lac: 1e5, lacs: 1e5, crore: 1e7, crores: 1e7 };
+const SPOKEN_SMALL: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, twenty: 20, thirty: 30, forty: 40, fifty: 50, hundred: 100,
+};
+
+/**
+ * Turn speech-to-text output into quick-add text:
+ * "450 rupees Swiggy on card" → "450 Swiggy on card", "2 thousand rent" → "2000 rent",
+ * "1.5 lakh" → "150000", "₹ 1,200" → "1200", "two hundred auto" → "200 auto".
+ */
+export function normalizeSpoken(text: string): string {
+  let s = ` ${text.toLowerCase().replace(/(\d),(?=\d)/g, "$1").replace(/[₹,]/g, " ")} `;
+  s = s.replace(/\b(rupees?|rs\.?|bucks|inr)\b/g, " ");
+  // "two hundred" / "five thousand" → digits
+  s = s.replace(/\b(one|two|three|four|five|six|seven|eight|nine|ten|twenty|thirty|forty|fifty)\s+(hundred|thousand|lakhs?)\b/g, (_, n: string, u: string) => String(SPOKEN_SMALL[n] * (u === "hundred" ? 100 : SPOKEN_UNITS[u])));
+  s = s.replace(/(\d+(?:\.\d+)?)\s*(thousands?|k|lakhs?|lacs?|crores?)\b/g, (_, n: string, u: string) => String(Math.round(parseFloat(n) * SPOKEN_UNITS[u])));
+  return s.replace(/\s+/g, " ").trim();
+}

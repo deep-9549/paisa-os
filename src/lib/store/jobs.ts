@@ -8,14 +8,15 @@ import { envelopes } from "../domain/budgets";
 import { getCycle, previousCycle } from "../domain/cycle";
 import { addDays, diffDays, fmtDate, istDate, istParts } from "../domain/dates";
 import { balanceSince } from "../domain/friends";
+import { streakInfo, trackedDays } from "../domain/habits";
 import { netWorth } from "../domain/insights";
 import { ipoReminders } from "../domain/ipo";
 import { isLive, spendInRange, txnDate } from "../domain/ledger";
 import { formatINR } from "../domain/money";
-import { dueToPost, occurrencesInRange, periodDays } from "../domain/recurring";
+import { dueToPost, occurrencesInRange, periodDays, priceChanges } from "../domain/recurring";
 import type { AppNotification, Tables } from "../types";
-import { getProfile, occurrenceTxn, postEmiCharges, purgeTrash, up } from "./actions";
-import { cardSummaries, salaryDates, safeToSpendFor } from "./selectors";
+import { del, getProfile, occurrenceTxn, postEmiCharges, purgeTrash, up } from "./actions";
+import { cardSummaries, cashForecastFor, salaryDates, safeToSpendFor } from "./selectors";
 import { type Change, getData, nowIso, uid, useStore } from "./store";
 
 function notif(id: string, kind: string, title: string, body: string, href: string | null = null): AppNotification {
@@ -97,9 +98,22 @@ export function runJobs(now = new Date()) {
     push(notif(`bill-${o.rule.id}-${o.date}-${n}`, "bill", n === 0 ? `${o.rule.name} due today` : `${o.rule.name} due ${n === 1 ? "tomorrow" : `in ${n} days`}`, `${formatINR(o.amount)} · ${fmtDate(o.date)}.`, "/plan/recurring"));
   }
   for (const r of ipoReminders(d.ipo_applications, today, addDays(today, 1))) push(notif(r.id, "ipo", r.title, r.body, "/invest"));
-  if (p.notify_daily_nudge && hour >= 21) {
+  // Morning briefs are only useful on the day; drop older ones.
+  for (const n of d.notifications) if (n.kind === "brief" && n.id !== `morning-${today}`) changes.push(del("notifications", n.id));
+  if (p.notify_daily_nudge && hour >= 8 && hour < 12) {
+    const sts = safeToSpendFor(d, today);
+    push(notif(`morning-${today}`, "brief", `${formatINR(Math.round(sts.todayLeft))} to spend today`, `${formatINR(Math.round(sts.month))} left for ${sts.daysLeft} day${sts.daysLeft === 1 ? "" : "s"} this month.`, "/"));
+  }
+  if (p.notify_daily_nudge && hour >= 21 && !d.day_logs.some((l) => l.date === today)) {
+    const streak = streakInfo(trackedDays(d.transactions, d.day_logs), today);
     const loggedToday = d.transactions.some((t) => isLive(t) && txnDate(t) === today && t.type === "expense");
-    if (!loggedToday) push(notif(`nudge-${today}`, "nudge", "Log today's spends?", "Takes 5 seconds with quick-add.", "/?add=1"));
+    push(notif(
+      `nudge-${today}`,
+      "nudge",
+      streak.atRisk ? `Keep your ${streak.current}-day streak 🔥` : loggedToday ? "Close your day" : "Log today's spends?",
+      loggedToday ? "Ten seconds: check today's spends and close the day." : "Nothing logged yet today. Add spends or close it as a no-spend day.",
+      "/?close=1",
+    ));
   }
   const reminderDays = p.friend_reminder_days || 14;
   for (const f of d.friends) {
@@ -119,6 +133,32 @@ export function runJobs(now = new Date()) {
   }
   if (cycle.end === today) push(notif(`monthend-${cycle.start}`, "report", "Last day of the budget month", "See where the money went and move leftovers to a goal.", "/reports"));
   ran("budget_pace", "ok");
+
+  // --- subscription / bill price changes ---
+  for (const c of priceChanges(d.recurring_rules, d.transactions)) {
+    if (diffDays(today, c.date) > 30) continue;
+    const rose = c.to > c.from;
+    push(notif(
+      `price-${c.rule.id}-${c.date}`,
+      "recurring",
+      `${c.rule.name} ${rose ? "went up" : "went down"}: ${formatINR(c.from)} → ${formatINR(c.to)}`,
+      rose ? `That's ${formatINR((c.to - c.from) * ({ monthly: 12, quarterly: 4, weekly: 52, yearly: 1, custom: 365 / Math.max(c.rule.interval_days ?? 30, 1) }[c.rule.frequency]))} more a year. Still worth it?` : "Update the rule so future months use the new amount.",
+      "/plan/recurring",
+    ));
+  }
+
+  // --- low balance ahead: warn a week before the bank would run short ---
+  const cash = cashForecastFor(d, today, 21);
+  if (cash.shortfall && diffDays(cash.shortfall.date, today) <= 7) {
+    const hit = cash.events.find((e) => e.date === cash.shortfall!.date && e.amount < 0);
+    push(notif(
+      `shortfall-${cash.shortfall.date}`,
+      "cash",
+      `Bank balance may run short on ${fmtDate(cash.shortfall.date)}`,
+      `${hit ? `${hit.label} (${formatINR(-hit.amount)}) is due then. ` : ""}Projected low ${formatINR(Math.round(cash.low.balance))}. Move money in or hold off big spends.`,
+      "/plan/cashflow",
+    ));
+  }
 
   // --- snapshot_net_worth (23:55) ---
   const nw = netWorth(d.accounts, d.transactions, d.settlements, d.holdings, d.transaction_splits);
@@ -143,9 +183,11 @@ async function showSystemNotifications(list: AppNotification[]) {
   if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") return;
   const reg = await navigator.serviceWorker?.getRegistration();
   for (const n of list.slice(0, 3)) {
-    const opts = { body: n.body, tag: n.id, data: { href: n.href ?? "/" }, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png" };
+    // Quick actions (Android/Chrome): handled in sw.js notificationclick.
+    const actions = n.kind === "brief" ? [{ action: "add", title: "Log a spend" }] : n.kind === "nudge" ? [{ action: "close", title: "Close day" }, { action: "add", title: "Add spend" }] : [];
+    const opts = { body: n.body, tag: n.id, data: { href: n.href ?? "/" }, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", actions } as NotificationOptions;
     if (reg) reg.showNotification(n.title, opts);
-    else new Notification(n.title, opts);
+    else new Notification(n.title, { ...opts, actions: undefined } as NotificationOptions);
   }
 }
 

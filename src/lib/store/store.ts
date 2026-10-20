@@ -35,13 +35,14 @@ interface State {
   locked: boolean;
   toasts: Toast[];
   quickAdd: { open: boolean; text?: string; mode?: string };
+  askOpen: boolean;
   hydrate: () => Promise<void>;
   commit: (changes: Change[], opts?: { sync?: boolean }) => void;
   replaceAll: (data: Tables) => void;
   toast: (t: Omit<Toast, "id" | "ttl"> & { ttl?: number }) => void;
   dismissToast: (id: string) => void;
   setQuickAdd: (q: State["quickAdd"]) => void;
-  set: (p: Partial<Pick<State, "syncStatus" | "userId" | "email" | "locked">>) => void;
+  set: (p: Partial<Pick<State, "syncStatus" | "userId" | "email" | "locked" | "askOpen">>) => void;
 }
 
 // Writes go to IndexedDB immediately (closing the app right after saving must
@@ -97,6 +98,7 @@ export const useStore = create<State>((set, get) => ({
   locked: false,
   toasts: [],
   quickAdd: { open: false },
+  askOpen: false,
 
   hydrate: async () => {
     const snap = await loadSnapshot<Partial<Tables>>();

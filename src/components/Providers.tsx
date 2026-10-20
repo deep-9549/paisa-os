@@ -63,11 +63,18 @@ export function Providers({ children }: { children: ReactNode }) {
     if (!profile.onboarded && !isPublic) router.replace("/onboarding");
   }, [hydrated, userId, profile.onboarded, path, router]);
 
-  // Theme + privacy classes on <html>.
+  // Theme + privacy classes on <html>. "system" follows the OS setting live.
   useEffect(() => {
-    document.documentElement.dataset.theme = profile.theme;
+    const mq = window.matchMedia("(prefers-color-scheme: light)");
+    const apply = () => {
+      const theme = profile.theme === "system" ? (mq.matches ? "light" : "dark") : profile.theme;
+      document.documentElement.dataset.theme = theme;
+      document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f4f5f9" : "#08090d");
+    };
+    apply();
     document.documentElement.classList.toggle("privacy", profile.privacy_mode);
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", profile.theme === "light" ? "#f5f6fa" : "#0b0d12");
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, [profile.theme, profile.privacy_mode]);
 
   // Scheduled jobs: on open and every 5 minutes.
@@ -104,8 +111,9 @@ export function Providers({ children }: { children: ReactNode }) {
 
   if (!hydrated) {
     return (
-      <div className="flex min-h-dvh items-center justify-center text-muted" aria-busy>
-        <span className="animate-pulse text-sm">Loading Paisa OS…</span>
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 text-muted" aria-busy>
+        <span className="flex h-12 w-12 animate-pulse items-center justify-center rounded-2xl bg-accent text-xl font-bold text-accent-ink">₹</span>
+        <span className="text-sm">Loading Paisa OS…</span>
       </div>
     );
   }
