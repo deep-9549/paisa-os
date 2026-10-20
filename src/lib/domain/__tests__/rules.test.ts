@@ -5,7 +5,7 @@ import { billEffect, computeSplit, friendBalances, simplifyDebts, upiPayLink } f
 import { goalReserve, plannedMonthly, roundUp } from "../goals";
 import { blockedAmount, listingGainPct, realisedPnl, releaseOnAllotment, taxEstimate } from "../ipo";
 import { normalizeSpoken, parseQuickAdd } from "../parser";
-import { detectRecurring, expectedAmount, occurrences } from "../recurring";
+import { detectRecurring, expectedAmount, occurrences, priceChanges } from "../recurring";
 import { computeSafeToSpend } from "../safeToSpend";
 import { isTransactionSms, likelyLogged, parseBankSms, splitSmsBatch } from "../sms";
 import { acct, txn } from "./fixtures";
@@ -326,5 +326,19 @@ describe("bulk SMS", () => {
   it("ignores OTPs and non-money messages", () => {
     expect(isTransactionSms(otp)).toBe(false);
     expect(isTransactionSms("Your statement is ready")).toBe(false);
+  });
+});
+
+describe("price changes", () => {
+  it("flags a subscription that went up", () => {
+    const r = rule({ id: "nf", name: "Netflix", kind: "subscription", amount: 499 });
+    const txns = [txn({ date: "2026-08-22", amount: 499, recurring_rule_id: "nf" }), txn({ date: "2026-09-22", amount: 499, recurring_rule_id: "nf" }), txn({ date: "2026-10-22", amount: 649, recurring_rule_id: "nf" })];
+    expect(priceChanges([r], txns)).toEqual([expect.objectContaining({ from: 499, to: 649, date: "2026-10-22" })]);
+  });
+  it("ignores variable bills and small moves", () => {
+    const v = rule({ id: "el", amount_min: 800, amount_max: 2000 });
+    const f = rule({ id: "wifi", amount: 799 });
+    const txns = [txn({ date: "2026-09-10", amount: 900, recurring_rule_id: "el" }), txn({ date: "2026-10-10", amount: 1500, recurring_rule_id: "el" }), txn({ date: "2026-09-10", amount: 799, recurring_rule_id: "wifi" }), txn({ date: "2026-10-10", amount: 810, recurring_rule_id: "wifi" })];
+    expect(priceChanges([v, f], txns)).toEqual([]);
   });
 });

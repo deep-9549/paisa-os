@@ -172,3 +172,27 @@ export function detectRecurring(txns: Transaction[], rules: RecurringRule[], tod
   }
   return out.sort((a, b) => b.amount - a.amount);
 }
+
+export interface PriceChange {
+  rule: RecurringRule;
+  from: number;
+  to: number;
+  date: DateStr;
+}
+
+/**
+ * Subscriptions and fixed bills whose latest payment moved more than 5% from
+ * the one before (price hikes, plan changes). Variable bills are expected to
+ * move, so they're skipped.
+ */
+export function priceChanges(rules: RecurringRule[], txns: Transaction[]): PriceChange[] {
+  const out: PriceChange[] = [];
+  for (const rule of rules) {
+    if (!rule.active || rule.txn_type !== "expense" || isVariable(rule)) continue;
+    const paid = txns.filter((t) => isLive(t) && t.recurring_rule_id === rule.id).sort((a, b) => a.occurred_at.localeCompare(b.occurred_at));
+    if (paid.length < 2) continue;
+    const [prev, last] = paid.slice(-2);
+    if (Math.abs(last.amount - prev.amount) > prev.amount * 0.05) out.push({ rule, from: prev.amount, to: last.amount, date: txnDate(last) });
+  }
+  return out;
+}

@@ -13,7 +13,7 @@ import { netWorth } from "../domain/insights";
 import { ipoReminders } from "../domain/ipo";
 import { isLive, spendInRange, txnDate } from "../domain/ledger";
 import { formatINR } from "../domain/money";
-import { dueToPost, occurrencesInRange, periodDays } from "../domain/recurring";
+import { dueToPost, occurrencesInRange, periodDays, priceChanges } from "../domain/recurring";
 import type { AppNotification, Tables } from "../types";
 import { del, getProfile, occurrenceTxn, postEmiCharges, purgeTrash, up } from "./actions";
 import { cardSummaries, cashForecastFor, salaryDates, safeToSpendFor } from "./selectors";
@@ -134,6 +134,19 @@ export function runJobs(now = new Date()) {
   if (cycle.end === today) push(notif(`monthend-${cycle.start}`, "report", "Last day of the budget month", "See where the money went and move leftovers to a goal.", "/reports"));
   ran("budget_pace", "ok");
 
+  // --- subscription / bill price changes ---
+  for (const c of priceChanges(d.recurring_rules, d.transactions)) {
+    if (diffDays(today, c.date) > 30) continue;
+    const rose = c.to > c.from;
+    push(notif(
+      `price-${c.rule.id}-${c.date}`,
+      "recurring",
+      `${c.rule.name} ${rose ? "went up" : "went down"}: ${formatINR(c.from)} → ${formatINR(c.to)}`,
+      rose ? `That's ${formatINR((c.to - c.from) * ({ monthly: 12, quarterly: 4, weekly: 52, yearly: 1, custom: 365 / Math.max(c.rule.interval_days ?? 30, 1) }[c.rule.frequency]))} more a year. Still worth it?` : "Update the rule so future months use the new amount.",
+      "/plan/recurring",
+    ));
+  }
+
   // --- low balance ahead: warn a week before the bank would run short ---
   const cash = cashForecastFor(d, today, 21);
   if (cash.shortfall && diffDays(cash.shortfall.date, today) <= 7) {
@@ -170,9 +183,11 @@ async function showSystemNotifications(list: AppNotification[]) {
   if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") return;
   const reg = await navigator.serviceWorker?.getRegistration();
   for (const n of list.slice(0, 3)) {
-    const opts = { body: n.body, tag: n.id, data: { href: n.href ?? "/" }, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png" };
+    // Quick actions (Android/Chrome): handled in sw.js notificationclick.
+    const actions = n.kind === "brief" ? [{ action: "add", title: "Log a spend" }] : n.kind === "nudge" ? [{ action: "close", title: "Close day" }, { action: "add", title: "Add spend" }] : [];
+    const opts = { body: n.body, tag: n.id, data: { href: n.href ?? "/" }, icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", actions } as NotificationOptions;
     if (reg) reg.showNotification(n.title, opts);
-    else new Notification(n.title, opts);
+    else new Notification(n.title, { ...opts, actions: undefined } as NotificationOptions);
   }
 }
 

@@ -83,7 +83,8 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const href = (event.notification.data && event.notification.data.href) || "/";
+  const quick = { add: "/?add=1", close: "/?close=1" };
+  const href = quick[event.action] || (event.notification.data && event.notification.data.href) || "/";
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {
