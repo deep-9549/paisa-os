@@ -10,6 +10,12 @@ Built from the product spec in [`docs/PRD.md`](docs/PRD.md).
   <img src="docs/screenshots/progress.png" width="200" alt="Progress: streak, habit calendar, weekly review and badges" />
   <img src="docs/screenshots/ask.png" width="200" alt="Ask Paisa: on-device answers to money questions" />
 </p>
+<p>
+  <img src="docs/screenshots/cashflow.png" width="200" alt="Cash flow: projected bank balance and its low point" />
+  <img src="docs/screenshots/health.png" width="200" alt="Money health score with factor breakdown" />
+  <img src="docs/screenshots/plan.png" width="200" alt="Budgets with pace" />
+  <img src="docs/screenshots/cards.png" width="200" alt="Credit cards" />
+</p>
 
 ## The daily loop
 
@@ -50,13 +56,17 @@ Every rule in PRD section 9 lives in [`src/lib/domain`](src/lib/domain) as pure 
 
 | Module | What's there |
 | --- | --- |
-| **Ask Paisa** | Plain-English questions answered on the device, no network: `food last month`, `swiggy this week`, `biggest spend in sep`, `where did my money go`, `can I afford 4000`, `who owes me`, `card bill`, `average per day`. Doubles as a jump-to-page palette (⌘K / Ctrl+K, or the search icon on Home). |
+| **Ask Paisa** | Plain-English questions answered on the device, no network: `food last month`, `swiggy this week`, `biggest spend in sep`, `where did my money go`, `can I afford 4000`, `who owes me`, `card bill`, `average per day`, `will I run short?`, `how healthy are my finances?`, `goa trip`. Doubles as a jump-to-page palette (⌘K / Ctrl+K, or the search icon on Home). |
 | **Daily habit** | Close-the-day check-in with mood and note, streaks (a day counts when closed or when you logged something by hand), no-spend days, week strip on Home, weekly review, habit calendar, badges, morning brief and streak-aware evening nudge. Stored in `day_logs`. |
-| **Quick-add** | Large amount field, a category grid ordered by what you use most, method chips, and account chips filtered by method (UPI offers the bank and RuPay cards and remembers the choice per merchant). "Log again" chips on Home and in every transaction's detail. Undo after every save. Natural language (`450 swiggy card`, `1200 dinner upi split rahul amit`, `3600 dinner paid by rahul split amit`, `yesterday 80 auto cash #office`). Paste a bank SMS and it gets parsed. Merchant memory, templates, duplicate warning, and "Bank or RuPay?" asked once per merchant and then remembered. |
+| **Cash flow** | Where your bank balance is heading over the next five weeks: scheduled income, bills and SIPs, card bills on their due dates (billed now and the current cycle later), and everyday spending from the bank at your routine run-rate. Shows the low point and any shortfall, with a warning notification a week ahead (Plan › Cash flow, and a card on Home). |
+| **Money health** | A 0–100 score from savings rate, emergency cushion, card utilisation, budgets kept, bills on time and the tracking habit. Each factor shows its points and a tip; factors without data are left out. |
+| **Trips** | A budget, dates and a tag per trip. While a trip is on, quick-add tags spends, can keep them out of the monthly budget (paid from savings), and abroad takes amounts in the trip currency at your rate. Live pace on Home; breakdown per trip. |
+| **Catch up from SMS** | Paste a batch of bank messages after a few missed days: each is parsed (card by last 4 digits, category from your history), OTPs and balance alerts are skipped, likely duplicates start unticked, and you import them in one tap. |
+| **Quick-add** | Voice input (mic in the quick-add field: "2 thousand rupees Myntra on card"). Sums like `120+80`, digit grouping as you type, and "Food: after this, ₹2,318 left" while you log. Large amount field, a category grid ordered by what you use most, method chips, and account chips filtered by method (UPI offers the bank and RuPay cards and remembers the choice per merchant). "Log again" chips on Home and in every transaction's detail. Undo after every save. Natural language (`450 swiggy card`, `1200 dinner upi split rahul amit`, `3600 dinner paid by rahul split amit`, `yesterday 80 auto cash #office`). Paste a bank SMS and it gets parsed. Merchant memory, templates, duplicate warning, and "Bank or RuPay?" asked once per merchant and then remembered. |
 | **Transactions** | Expense, income, transfer, refund (partial too), card payment and adjustment. Splits, receipts, location and tags. Search, filters, calendar view, bulk edit, 10-second undo, 30-day trash and edit history. |
 | **Credit cards** | Cycles computed from the statement day (clamped to month end), statements with min due (max of 5% or ₹200, plus EMIs), payments applied to the oldest statement first, utilisation alert above 30%, EMI conversion with interest + GST schedule, reward rules and points expiry, annual-fee waiver progress, and statement reconciliation from pasted lines. |
 | **Budgets** | Calendar month, custom start day (1–31), or "from the day salary lands". Changing the setting never rewrites past cycles. Envelopes that cover UPI, card and cash together, rollover, pace indicator, card cap, method split, and a zero-based view. |
-| **Recurring & rent** | Spots untracked subscriptions and bills (three or more evenly spaced, similar payments to one merchant) and offers to track them. Fixed or variable amounts (variable uses a 3-month average). Monthly, quarterly, yearly, weekly or every N days. Auto-post or confirm-drafts, rent escalation and deposit, subscription audit, and printable rent receipts for HRA. |
+| **Recurring & rent** | Spots untracked subscriptions and bills (three or more evenly spaced, similar payments to one merchant) and offers to track them. Alerts when a subscription or fixed bill changes price ("Netflix went up: ₹499 → ₹649"). Fixed or variable amounts (variable uses a 3-month average). Monthly, quarterly, yearly, weekly or every N days. Auto-post or confirm-drafts, rent escalation and deposit, subscription audit, and printable rent receipts for HRA. |
 | **IPO** | Applied → blocked → allotted / partial / not allotted → listed → sold. The hold reduces Safe-to-Spend and is released when you mark the allotment. Listing gain, P&L, STCG/LTCG estimate (rates are editable), hit-rate, best/worst IPO, and family PANs. |
 | **Friends** | Split equally, by exact amounts, percentages, shares or per item. Several people can pay one bill. Per-friend and group balances, simplify debts (greedy), settle up through a `upi://pay` deep link or a WhatsApp request, outing mode, and stats. |
 | **Goals** | Monthly contribution reserved from Safe-to-Spend, emergency fund (6 × average monthly spend), sinking funds, round-ups, and moving leftover money to a goal at month end. |
@@ -77,7 +87,7 @@ Next.js 15 (App Router) PWA ──► Zustand store ──► IndexedDB (Dexie):
 ```
 
 - **Local-first.** Every write is applied optimistically, persisted to IndexedDB right away, and queued in an outbox. With Supabase configured, the outbox flushes to Postgres when you're online, a full pull runs on sign-in, and Realtime keeps phone and desktop in sync. Column names in [`src/lib/types.ts`](src/lib/types.ts) match the tables one-to-one.
-- **Database.** [`supabase/migrations`](supabase/migrations) contains 29 tables, all with the same `user_id = auth.uid()` RLS policy, money stored as `numeric(14,2)`, a private receipts bucket, and these functions: `assign_card_cycle()` trigger, `close_card_cycle()`, `allocate_card_payments()`, `release_ipo_hold()`, `safe_to_spend()` RPC, the `friend_balances` view, plus pg_cron jobs (`post_recurring`, `close_card_cycles`, `reminders`, `budget_pace`, `snapshot_net_worth`) that log to `job_runs`.
+- **Database.** [`supabase/migrations`](supabase/migrations) contains 30 tables, all with the same `user_id = auth.uid()` RLS policy, money stored as `numeric(14,2)`, a private receipts bucket, and these functions: `assign_card_cycle()` trigger, `close_card_cycle()`, `allocate_card_payments()`, `release_ipo_hold()`, `safe_to_spend()` RPC, the `friend_balances` view, plus pg_cron jobs (`post_recurring`, `close_card_cycles`, `reminders`, `budget_pace`, `snapshot_net_worth`) that log to `job_runs`.
 - **Jobs on the client too.** The same jobs run in the browser when the app opens and every 5 minutes (they're idempotent), so local-only mode still gets reminders and statements.
 - **Server routes.** `/api/push/subscribe` stores Web Push subscriptions. `/api/cron/push` and `/api/cron/digest` are Vercel Cron routes that deliver pending notifications and the weekly Resend email.
 - **Security.** CSP and HSTS headers, the service-role key used only in server code, receipts behind 60-second signed URLs, and only the last 4 digits of a card stored.
@@ -92,7 +102,7 @@ Next.js 15 (App Router) PWA ──► Zustand store ──► IndexedDB (Dexie):
 
 ## Supabase setup (optional)
 
-1. Create a project and run the migrations with `supabase db push`, or paste both files from `supabase/migrations` into the SQL editor. Enable `pg_cron` first if you want the server-side jobs.
+1. Create a project and run the migrations with `supabase db push`, or paste every file from `supabase/migrations` into the SQL editor, oldest first. Enable `pg_cron` first if you want the server-side jobs.
 2. Turn on the Email (magic link) and Google auth providers. Add your site URL to the redirect URLs.
 3. Copy `.env.example` to `.env.local` and fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. For push and cron, also set `SUPABASE_SERVICE_ROLE_KEY`, the VAPID keys (`npx web-push generate-vapid-keys`) and `CRON_SECRET`.
 4. Deploy to Vercel. `vercel.json` schedules the push delivery job (09:00 IST) and the weekly digest (Sunday 10:00 IST).
@@ -103,7 +113,7 @@ The first time you sign in on a device that already has local data, that data is
 
 ```bash
 npm test          # Vitest: unit tests for the section 9 rules, habits, Ask Paisa and recurring detection
-npm run e2e       # Playwright: flows F1–F7 plus the close-the-day habit flow on a Pixel 7 viewport (run `npm run build` first)
+npm run e2e       # Playwright: flows F1–F7 plus habit, salary, voice, SMS catch-up and trip flows on a Pixel 7 viewport (run `npm run build` first)
 npm run typecheck
 npm run lint
 ```
@@ -118,7 +128,7 @@ src/
   components/          TxnForm (quick-add + editor), QuickAdd, TxnDetail, Habit (streak, week strip,
                        close-the-day), AskSheet, GettingStarted, Spotted, CardForm, IpoForm, ui primitives
   lib/domain/          pure rules: cycle, ledger, cards, safeToSpend, friends, ipo, recurring, budgets,
-                       goals, insights, habits, ask, parser, sms, tax (+ __tests__)
+                       goals, insights, habits, ask, cashflow, health, trips, parser, sms, tax (+ __tests__)
   lib/store/           Zustand store, IndexedDB, actions, selectors, jobs, Supabase sync, demo/onboarding
 supabase/migrations/   schema, RLS, functions, pg_cron
 e2e/                   Playwright flows
