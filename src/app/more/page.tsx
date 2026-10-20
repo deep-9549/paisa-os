@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChartColumn, ChevronRight, CreditCard, Flame, type LucideIcon, Receipt, Repeat, Rocket, Search, Settings, Target, TrendingUp, Users } from "lucide-react";
+import { Bell, ChartColumn, ChevronRight, CreditCard, Flame, type LucideIcon, Plane, Receipt, Repeat, Rocket, Search, Settings, Target, TrendingUp, Users } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Amount, Avatar, PageHeader, Ring, SectionTitle } from "@/components/ui";
@@ -80,6 +80,7 @@ export default function MorePage() {
         <Tile href="/friends" icon={Users} color="#22c55e" title="Friends" sub={owed ? <><Amount value={owed} /> owed to you</> : "All settled"} />
         <Tile href="/plan/goals" icon={Target} color="#a855f7" title="Goals" sub={activeGoals.length ? `${activeGoals.length} active · ${goalPct}% avg` : "Start saving for something"} />
         <Tile href="/plan/recurring" icon={Repeat} color="#3b82f6" title="Bills & rent" sub={due ? `${due} due in 30 days` : "Nothing due soon"} />
+        <Tile href="/trips" icon={Plane} color="#06b6d4" title="Trips" sub={d.trips.length ? `${d.trips.filter((t) => !t.archived && t.end_date >= today).length} planned or on` : "Budget a trip, auto-tag spends"} />
         <Tile href="/invest" icon={Rocket} color="#ec4899" title="IPO tracker" sub={sts.holds ? <><Amount value={sts.holds} /> blocked</> : "Apply → allot → list"} />
         <Tile href="/invest/portfolio" icon={TrendingUp} color="#14b8a6" title="Portfolio" sub={`${d.holdings.length} holding${d.holdings.length === 1 ? "" : "s"}`} />
       </div>

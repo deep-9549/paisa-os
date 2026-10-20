@@ -25,7 +25,7 @@ const ORDER: TableName[] = [
   "profiles", "accounts", "categories", "friends", "friend_groups", "recurring_rules", "ipo_applications",
   "credit_cards", "upi_handles", "card_cycles", "goals", "transactions", "card_emis", "transaction_splits",
   "group_members", "holds", "holdings", "settlements", "goal_contributions", "budget_lines", "rules",
-  "merchant_memory", "templates", "net_worth_snapshots", "notifications", "audit_log", "job_runs", "day_logs",
+  "merchant_memory", "templates", "net_worth_snapshots", "notifications", "audit_log", "job_runs", "day_logs", "trips",
 ];
 
 export async function flushOutbox(): Promise<void> {

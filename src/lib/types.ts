@@ -397,6 +397,23 @@ export interface AuditEntry {
   at: Timestamp;
 }
 
+/** A trip: a tag with a budget and dates; quick-add tags spends while it's active. */
+export interface Trip {
+  id: ID;
+  user_id?: string;
+  name: string;
+  emoji: string;
+  tag: string;
+  budget: number;
+  start_date: DateStr;
+  end_date: DateStr;
+  currency: string | null; // e.g. "USD" for trips abroad
+  fx_rate: number | null; // ₹ per unit of `currency`
+  separate_budget: boolean; // keep trip spends out of the monthly budget
+  archived: boolean;
+  created_at: Timestamp;
+}
+
 /** A day the user "closed": reviewed today's spends (drives streaks). */
 export interface DayLog {
   id: ID; // the IST date
@@ -447,6 +464,7 @@ export interface Tables {
   audit_log: AuditEntry[];
   job_runs: JobRun[];
   day_logs: DayLog[];
+  trips: Trip[];
 }
 
 export type TableName = keyof Tables;
@@ -481,6 +499,7 @@ export const PRIMARY_KEY: Record<TableName, string> = {
   audit_log: "id",
   job_runs: "id",
   day_logs: "id",
+  trips: "id",
 };
 
 export const TABLE_NAMES = Object.keys(PRIMARY_KEY) as TableName[];

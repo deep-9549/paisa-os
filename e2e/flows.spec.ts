@@ -186,3 +186,25 @@ test("Catch up: paste bank SMS, review, import", async ({ page }) => {
   // …the Amazon card swipe lands on the card matched by its last 4 digits.
   await expect(page.getByRole("button", { name: /Amazon.*BOI RuPay Credit Card/ }).first()).toBeVisible();
 });
+
+test("Trip abroad: amounts in USD, tagged, outside the monthly budget", async ({ page }) => {
+  await onboard(page);
+  await reload(page, "/trips");
+  await page.getByRole("button", { name: "Plan a trip" }).click();
+  await page.getByPlaceholder("Goa with college gang").fill("Bali");
+  await page.getByPlaceholder("20,000").fill("50000");
+  await page.getByRole("switch", { name: /Trip abroad/ }).click();
+  await page.getByPlaceholder("83.2").fill("83");
+  await page.getByRole("button", { name: "Start planning" }).click();
+  await expect(page.getByText("✈️ Bali")).toBeVisible();
+  await reload(page, "/");
+  await quickAdd(page, "25 lunch");
+  await expect(page.getByText("= ₹2,075 at ₹83")).toBeVisible();
+  await page.getByRole("button", { name: /^Save ₹2,075/ }).click();
+  await expect(page.getByText(/Bali · day 1 of 4/)).toBeVisible();
+  await reload(page, "/trips");
+  await expect(page.getByText("₹47,925 left")).toBeVisible();
+  // Kept out of the monthly budget.
+  await reload(page, "/activity?type=expense");
+  await expect(page.getByText(/budget impact\s*₹0/)).toBeVisible();
+});

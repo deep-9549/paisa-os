@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  Bell, ChartColumn, HeartPulse, ChartPie, CreditCard, House, LayoutGrid, type LucideIcon, Plus, ReceiptText, Repeat, Rocket, Search, Settings, Target, TrendingUp, Users,
+  Bell, ChartColumn, HeartPulse, Plane, ChartPie, CreditCard, House, LayoutGrid, type LucideIcon, Plus, ReceiptText, Repeat, Rocket, Search, Settings, Target, TrendingUp, Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -37,6 +37,7 @@ const SIDEBAR: { group: string; items: NavItem[] }[] = [
       { href: "/plan", label: "Budgets", icon: ChartPie },
       { href: "/plan/recurring", label: "Bills & recurring", icon: Repeat },
       { href: "/plan/goals", label: "Goals", icon: Target },
+      { href: "/trips", label: "Trips", icon: Plane },
     ],
   },
   {
@@ -61,7 +62,7 @@ const BARE = ["/onboarding", "/login", "/rent-receipt"];
 
 function isActive(path: string, href: string) {
   if (href === "/") return path === "/";
-  if (href === "/more") return ["/more", "/cards", "/friends", "/reports", "/settings", "/invest", "/tax", "/notifications", "/review", "/health"].some((p) => path.startsWith(p));
+  if (href === "/more") return ["/more", "/cards", "/friends", "/reports", "/settings", "/invest", "/tax", "/notifications", "/review", "/health", "/trips", "/catch-up"].some((p) => path.startsWith(p));
   if (href === "/plan") return path.startsWith("/plan");
   return path.startsWith(href);
 }

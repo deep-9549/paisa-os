@@ -12,11 +12,12 @@ import { appliedShares, blockedAmount, issuePrice, realisedPnl, releaseOnAllotme
 import { isSalaryIncome } from "../domain/ledger";
 import { keywordCategory, merchantKey } from "../domain/parser";
 import type { SmsDraft } from "../domain/sms";
+import { tripTag } from "../domain/trips";
 import type { RecurringCandidate } from "../domain/recurring";
 import { round2 } from "../domain/money";
 import type {
   Account, CardEmi, Category, CreditCard, Friend, Goal, Hold, ID, IpoApplication, PayMethod, Profile,
-  RecurringRule, SplitMode, Tables, Transaction, TransactionSplit,
+  RecurringRule, SplitMode, Tables, Transaction, TransactionSplit, Trip,
 } from "../types";
 import { type Change, getData, nowIso, uid, useStore } from "./store";
 
@@ -645,6 +646,19 @@ export function saveHolding(h: Partial<Tables["holdings"][number]> & { name: str
   commit([up("holdings", { id: uid(), symbol: null, kind: "stock", quantity: 0, avg_cost: 0, current_price: 0, account_id: null, ipo_application_id: null, buy_date: null, as_of: istDate(), ...h })]);
 }
 export const deleteHolding = (id: string) => commit([del("holdings", id)]);
+
+// ---------------- trips ----------------
+
+export function newTrip(p: Partial<Trip> & { name: string; start_date: string; end_date: string }): Trip {
+  return { id: uid(), emoji: "✈️", tag: tripTag(p.name), budget: 0, currency: null, fx_rate: null, separate_budget: false, archived: false, created_at: nowIso(), ...p };
+}
+
+export function saveTrip(t: Trip) {
+  commit([up("trips", t)]);
+}
+
+/** Delete a trip; its spends keep their tag. */
+export const deleteTrip = (id: string) => commit([del("trips", id)]);
 
 // ---------------- daily habit ----------------
 

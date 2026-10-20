@@ -9,6 +9,7 @@ grant execute on all functions in schema public, auth to authenticated;
 insert into accounts (user_id, name, type) values ('00000000-0000-0000-0000-00000000000a', 'A bank', 'savings');
 insert into accounts (user_id, name, type) values ('00000000-0000-0000-0000-00000000000b', 'B bank', 'savings');
 insert into day_logs (user_id, id, date) values ('00000000-0000-0000-0000-00000000000b', '2026-10-19', '2026-10-19');
+insert into trips (user_id, name, tag, start_date, end_date) values ('00000000-0000-0000-0000-00000000000b', 'B trip', 'btrip', '2026-11-01', '2026-11-03');
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-00000000000a', true);
@@ -20,6 +21,7 @@ begin
   if n <> 1 then raise exception 'RLS read leak: user A sees % accounts', n; end if;
   if exists (select 1 from accounts where name = 'B bank') then raise exception 'RLS read leak: B visible to A'; end if;
   if exists (select 1 from day_logs) then raise exception 'RLS read leak: B day_logs visible to A'; end if;
+  if exists (select 1 from trips) then raise exception 'RLS read leak: B trips visible to A'; end if;
 
   begin
     insert into accounts (user_id, name, type) values ('00000000-0000-0000-0000-00000000000b', 'forged', 'cash');

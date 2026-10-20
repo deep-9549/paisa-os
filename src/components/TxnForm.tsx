@@ -6,6 +6,7 @@ import { computeSplit, type Participant } from "@/lib/domain/friends";
 import { dateToTs, istDate } from "@/lib/domain/dates";
 import { findDuplicate } from "@/lib/domain/ledger";
 import { envelopes } from "@/lib/domain/budgets";
+import { activeTrip } from "@/lib/domain/trips";
 import { formatINR, groupTyping, parseAmount, round2 } from "@/lib/domain/money";
 import { merchantKey, normalizeSpoken, parseQuickAdd } from "@/lib/domain/parser";
 import { parseBankSms } from "@/lib/domain/sms";
@@ -72,6 +73,8 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
   const [split, setSplit] = useState<SplitState>(() => (initial ? splitFromTxn(initial, d.transaction_splits) : { ...emptySplit(), on: initialMode === "split" }));
   const [details, setDetails] = useState(editing);
   const [showAllCats, setShowAllCats] = useState(false);
+  const [onTrip, setOnTrip] = useState(true);
+  const [fx, setFx] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dupOk, setDupOk] = useState(false);
   const nlRef = useRef<HTMLInputElement>(null);
@@ -162,7 +165,12 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
     } else if (split.on && mode !== "split") setSplit(emptySplit());
   }
 
-  const amt = parseAmount(amount) ?? 0;
+  // Trip mode: tag spends with the active trip; abroad, type amounts in its currency.
+  const trip = !editing ? activeTrip(d.trips, istDate()) : null;
+  const tripMode = !!trip && (mode === "expense" || mode === "split") && onTrip;
+  const fxRate = tripMode && fx && trip?.currency && trip.fx_rate ? trip.fx_rate : null;
+  const rawAmt = parseAmount(amount) ?? 0;
+  const amt = fxRate ? round2(rawAmt * fxRate) : rawAmt;
   const account = accounts.find((a) => a.id === accountId);
   const nameOf = (id: string) => (id === ME ? "Me" : id.startsWith("new:") ? id.slice(4) : d.friends.find((f) => f.id === id)?.name ?? "?");
 
@@ -231,9 +239,9 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
       method: type === "transfer" ? (method === "card" ? "netbanking" : method) : method,
       category_id: type === "transfer" ? categoryId || null : categoryId || null,
       merchant: merchant.trim() || null,
-      note: note.trim() || null,
-      tags: tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean),
-      exclude_from_budget: exclude,
+      note: [note.trim(), fxRate && trip ? `${trip.currency} ${rawAmt} @ ₹${fxRate}` : ""].filter(Boolean).join(" · ") || null,
+      tags: [...new Set([...tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean), ...(tripMode && trip ? [trip.tag] : [])])],
+      exclude_from_budget: exclude || (tripMode && !!trip?.separate_budget),
       receipt_path: receipt,
       location,
     };
@@ -334,9 +342,24 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
         </div>
       )}
 
+      {trip && (mode === "expense" || mode === "split") && (
+        <div className={cn("mt-3 flex flex-wrap items-center gap-2 rounded-2xl px-3 py-2 text-sm", onTrip ? "bg-accent/10" : "bg-surface-2")}>
+          <span className="flex-1">
+            {trip.emoji} <span className="font-semibold">{trip.name}</span>
+            <span className="text-muted"> · {onTrip ? `tagged #${trip.tag}${trip.separate_budget ? ", outside monthly budget" : ""}` : "not a trip spend"}</span>
+          </span>
+          {onTrip && trip.currency && trip.fx_rate && (
+            <Chip active={fx} onClick={() => setFx(!fx)}>{trip.currency}</Chip>
+          )}
+          <button type="button" onClick={() => setOnTrip(!onTrip)} className="min-h-9 rounded-xl px-2 text-xs font-semibold text-accent">
+            {onTrip ? "Not for the trip" : "Add to trip"}
+          </button>
+        </div>
+      )}
+
       {/* Amount */}
-      <label className="mt-4 flex items-center justify-center gap-1 rounded-3xl bg-surface-2 px-4 py-3">
-        <span className={cn("text-3xl font-semibold", amt > 0 ? "text-ink" : "text-muted/60")}>₹</span>
+      <label className="mt-4 flex flex-wrap items-center justify-center gap-1 rounded-3xl bg-surface-2 px-4 py-3">
+        <span className={cn("text-3xl font-semibold", amt > 0 ? "text-ink" : "text-muted/60")}>{fxRate && trip?.currency ? trip.currency : "₹"}</span>
         <input
           inputMode="decimal"
           value={amount}
@@ -346,6 +369,7 @@ export function TxnForm({ initial, mode: initialMode = "expense", presetText, on
           className="display w-full min-w-0 bg-transparent text-center text-[44px] leading-tight outline-none placeholder:text-muted/40"
           style={{ maxWidth: `${Math.max(amount.length, 1) + 1.5}ch` }}
         />
+        {fxRate && rawAmt > 0 && <span className="w-full text-center text-sm text-muted">= {formatINR(amt, { decimals: amt % 1 !== 0 })} at ₹{fxRate}</span>}
       </label>
 
       {/* Category */}

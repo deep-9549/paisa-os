@@ -14,6 +14,7 @@ import { recentCycles } from "@/lib/domain/cycle";
 import { backupNow, lastBackupAt } from "@/lib/data";
 import { addDays, diffDays, fmtDate, istDate, relativeDay } from "@/lib/domain/dates";
 import { anomalies, forecastMonthEnd } from "@/lib/domain/insights";
+import { activeTrip, tripSummary } from "@/lib/domain/trips";
 import { isLive, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
 import { occurrencesInRange } from "@/lib/domain/recurring";
@@ -39,6 +40,8 @@ export default function Home() {
   const [closing, setClosing] = useState(false);
   const [spotted, dismissSpotted] = useSpotted();
   const cash = useCashForecast(35);
+  const trip = activeTrip(d.trips, today);
+  const tripNow = useMemo(() => (trip ? tripSummary(trip, d.transactions, d.categories, today) : null), [trip, d.transactions, d.categories, today]);
   const userId = useStore((s) => s.userId);
   const [lastBackup, setLastBackup] = useState<string | null>(null);
   useEffect(() => setLastBackup(lastBackupAt()), []);
@@ -182,6 +185,19 @@ export default function Home() {
           </button>
         ))}
       </div>
+
+      {trip && tripNow && (
+        <Link href="/trips" className="hero mt-3 flex items-center gap-3 rounded-3xl border border-line p-3.5 shadow-card">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-ink/10 text-xl">{trip.emoji}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold">{trip.name} · day {tripNow.dayNo} of {tripNow.days}</span>
+            <span className={cn("block truncate text-xs", tripNow.left < 0 ? "text-bad" : "text-muted")}>
+              {formatINR(tripNow.spent)} spent{trip.budget > 0 && (tripNow.left >= 0 ? ` · ${formatINR(Math.round(tripNow.perDayLeft))}/day left` : ` · ${formatINR(-tripNow.left)} over`)}
+            </span>
+          </span>
+          <ChevronRight size={18} className="text-muted" aria-hidden />
+        </Link>
+      )}
 
       <CloseDayCard onOpen={() => setClosing(true)} />
       <GettingStarted onCloseDay={() => setClosing(true)} />

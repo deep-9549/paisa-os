@@ -27,6 +27,7 @@ const PAGES = [
   { href: "/review", label: "Your progress", keys: "streak badges review weekly habit challenge" },
   { href: "/health", label: "Money health score", keys: "health score savings rate emergency fund" },
   { href: "/plan/cashflow", label: "Cash flow forecast", keys: "cash flow balance forecast run short low" },
+  { href: "/trips", label: "Trips", keys: "trip travel holiday vacation abroad currency" },
   { href: "/catch-up", label: "Catch up from SMS", keys: "sms import paste bank messages catch up missed" },
   { href: "/tax", label: "Tax helper", keys: "tax hra 80c capital gains" },
   { href: "/notifications", label: "Notifications", keys: "alerts reminders" },
