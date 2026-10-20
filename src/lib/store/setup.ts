@@ -224,6 +224,10 @@ export function loadDemo() {
   base.budget_lines = [
     ["Food", 9000], ["Transport", 3500], ["Shopping", 5000], ["Entertainment", 3000], ["Bills & Utilities", 3500],
   ].map(([p, a]) => ({ id: uid(), category_id: cat(p as string)!, amount: a as number, rollover: p === "Food" }));
+  base.trips = [{
+    id: uid(), name: "Goa with the gang", emoji: "🏖️", tag: "goa", budget: 30000, start_date: addDays(today, 24), end_date: addDays(today, 28),
+    currency: null, fx_rate: null, separate_budget: true, archived: false, created_at: new Date().toISOString(),
+  }];
   base.goals = [
     newGoal({ name: "Goa trip", target: 30000, target_date: addDays(today, 100), emoji: "🏖️", roundup_to: 10 }),
     newGoal({ name: "Emergency fund", kind: "emergency", target: 300000, emoji: "🛟" }),

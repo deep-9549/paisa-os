@@ -82,6 +82,17 @@ describe("ask", () => {
     expect(ask("does a+ owe me", ctx({ friends: [odd], friendBalances: new Map([["f2", -50]]) })).title).toBe("You owe A+ (office) ₹50");
   });
 
+  it("answers cash-flow, health and trip questions", () => {
+    const c = ctx({
+      cash: { low: -2000, lowDate: "2026-10-26", shortfallDate: "2026-10-25" },
+      health: { score: 72, grade: "Good", weakest: "Emergency cushion" },
+      trips: [{ name: "Goa 2026", tag: "goa2026", budget: 20000, spent: 4500, href: "/trips" }],
+    });
+    expect(ask("will I run short this month", c)).toMatchObject({ kind: "cash", tone: "bad" });
+    expect(ask("how healthy are my finances", c).title).toBe("Money health 72/100 · Good");
+    expect(ask("how much on goa trip", c)).toMatchObject({ kind: "trip", value: 4500 });
+  });
+
   it("says when it can't find something", () => {
     expect(ask("zzzqqq", ctx()).kind).toBe("none");
   });

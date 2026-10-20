@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ASK_SUGGESTIONS, ask } from "@/lib/domain/ask";
 import { formatINR } from "@/lib/domain/money";
-import { useCardSummaries, useCycle, useData, useFriendBalances, useNetWorth, usePrevCycle, useSafeToSpend, useToday } from "@/lib/store/selectors";
+import { tripSummary } from "@/lib/domain/trips";
+import { useCardSummaries, useCashForecast, useCycle, useData, useFriendBalances, useHealth, useNetWorth, usePrevCycle, useSafeToSpend, useToday } from "@/lib/store/selectors";
 import { useStore } from "@/lib/store/store";
 import type { Transaction } from "@/lib/types";
 import { TxnDetailSheet } from "./TxnDetail";
@@ -67,6 +68,8 @@ function AskBody({ onClose }: { onClose: () => void }) {
   const balances = useFriendBalances();
   const nw = useNetWorth();
   const cards = useCardSummaries();
+  const cash = useCashForecast(35);
+  const health = useHealth();
   const router = useRouter();
   const [q, setQ] = useState("");
   const [openTxn, setOpenTxn] = useState<Transaction | null>(null);
@@ -77,8 +80,11 @@ function AskBody({ onClose }: { onClose: () => void }) {
       safe: { month: sts.month, todayLeft: sts.todayLeft, dailyAllowance: sts.dailyAllowance, daysLeft: sts.daysLeft, trueCash: sts.trueCash },
       netWorth: nw.total,
       cards: cards.map((c) => ({ name: c.account.name, due: c.nextDue?.amount ?? 0, dueDate: c.nextDue?.date ?? null, unbilled: c.unbilled, href: `/cards/${c.card.account_id}` })),
+      cash: { low: cash.low.balance, lowDate: cash.low.date, shortfallDate: cash.shortfall?.date ?? null },
+      health: { score: health.score, grade: health.grade, weakest: [...health.factors].filter((f) => (1 - (f.score ?? 1)) * f.weight >= 1).sort((a, b) => (1 - (b.score ?? 1)) * b.weight - (1 - (a.score ?? 1)) * a.weight)[0]?.label ?? null },
+      trips: d.trips.map((t) => ({ name: t.name, tag: t.tag, budget: t.budget, spent: tripSummary(t, d.transactions, d.categories, today).spent, href: "/trips" })),
     }),
-    [today, cycle, prevCycle, d, balances, sts, nw.total, cards],
+    [today, cycle, prevCycle, d, balances, sts, nw.total, cards, cash, health],
   );
   const answer = useMemo(() => (q.trim() ? ask(q, ctx) : null), [q, ctx]);
   const needle = q.trim().toLowerCase();

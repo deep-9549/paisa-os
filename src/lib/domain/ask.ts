@@ -28,6 +28,10 @@ export interface AskContext {
   safe: { month: number; todayLeft: number; dailyAllowance: number; daysLeft: number; trueCash: number };
   netWorth: number;
   cards: { name: string; due: number; dueDate: DateStr | null; unbilled: number; href: string }[];
+  /** Projected bank balance (cash-flow forecast). */
+  cash?: { low: number; lowDate: DateStr; shortfallDate: DateStr | null };
+  health?: { score: number; grade: string; weakest: string | null };
+  trips?: { name: string; tag: string; budget: number; spent: number; href: string }[];
 }
 
 export interface Period {
@@ -39,7 +43,7 @@ export interface Period {
 }
 
 export interface Answer {
-  kind: "spend" | "biggest" | "where" | "afford" | "owe" | "card" | "networth" | "average" | "safe" | "none";
+  kind: "spend" | "biggest" | "where" | "afford" | "owe" | "card" | "networth" | "average" | "safe" | "cash" | "health" | "trip" | "none";
   title: string;
   text: string;
   value?: number;
@@ -231,6 +235,31 @@ export function ask(question: string, ctx: AskContext): Answer {
     };
   }
 
+  if (ctx.cash && /\b(run (out|short)|short of|cash ?flow|low balance|balance (ahead|next)|enough (money|cash))\b/.test(q)) {
+    const c = ctx.cash;
+    return c.shortfallDate
+      ? { kind: "cash", title: `You may run short on ${fmtDate(c.shortfallDate)}`, text: `The bank balance is projected to dip to ${formatINR(Math.round(c.low))}. Move money in or hold off big spends.`, tone: "bad", value: c.low, href: "/plan/cashflow" }
+      : { kind: "cash", title: `No — lowest is ${formatINR(Math.round(c.low))}`, text: `Your bank balance bottoms out on ${fmtDate(c.lowDate)} over the next 5 weeks, after bills and card dues.`, tone: "good", value: c.low, href: "/plan/cashflow" };
+  }
+
+  if (ctx.health && /\b(health|healthy|score|how am i doing|doing ok)\b/.test(q)) {
+    const h = ctx.health;
+    return { kind: "health", title: `Money health ${h.score}/100 · ${h.grade}`, text: h.weakest ? `Biggest win next: ${h.weakest.toLowerCase()}.` : "All six habits look solid.", value: h.score, tone: h.score >= 65 ? "good" : h.score >= 45 ? "warn" : "bad", href: "/health" };
+  }
+
+  const tripHit = ctx.trips?.find((t) => q.includes(t.tag) || q.includes(t.name.toLowerCase()) || q.includes(t.name.toLowerCase().split(/\s+/)[0]));
+  if (tripHit && /\btrip\b|\b(spent|spend|budget|left)\b/.test(q)) {
+    const left = tripHit.budget - tripHit.spent;
+    return {
+      kind: "trip",
+      title: `${formatINR(tripHit.spent)} on ${tripHit.name}`,
+      text: tripHit.budget > 0 ? (left >= 0 ? `${formatINR(left)} left of the ${formatINR(tripHit.budget)} trip budget.` : `${formatINR(-left)} over the ${formatINR(tripHit.budget)} trip budget.`) : "No budget set for this trip.",
+      value: tripHit.spent,
+      tone: left >= 0 ? "good" : "bad",
+      href: tripHit.href,
+    };
+  }
+
   if (/\bnet ?worth\b|\bworth\b/.test(q)) {
     return { kind: "networth", title: `Net worth ${formatINR(ctx.netWorth)}`, text: "Bank, cash and investments minus card dues and loans.", value: ctx.netWorth, href: "/invest/portfolio" };
   }
@@ -323,4 +352,6 @@ export const ASK_SUGGESTIONS = [
   "Swiggy last month",
   "Average per day this week",
   "Card bill",
+  "Will I run short?",
+  "How healthy are my finances?",
 ];
