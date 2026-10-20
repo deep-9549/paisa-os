@@ -3,7 +3,7 @@
 import { ArrowDownRight, ArrowUpRight, ChevronLeft, ChevronRight, Flame } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ChallengeCard, CloseDaySheet } from "@/components/Habit";
-import { Amount, Button, Card, PageHeader, SectionTitle, cn } from "@/components/ui";
+import { Amount, Button, Card, LinkButton, PageHeader, SectionTitle, cn } from "@/components/ui";
 import { addDays, fmtDate, parseDate, toDateStr } from "@/lib/domain/dates";
 import { badges, nextMilestone, noSpendDays, trackedDays, weekOf, weekReview } from "@/lib/domain/habits";
 import { formatINR } from "@/lib/domain/money";
@@ -47,9 +47,12 @@ export default function ReviewPage() {
           </div>
         </div>
         {yesterdayOpen && (
-          <Button size="sm" className="mt-4" onClick={() => setClosing(yesterday)}>
-            Close yesterday ({fmtDate(yesterday)})
-          </Button>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => setClosing(yesterday)}>
+              Close yesterday ({fmtDate(yesterday)})
+            </Button>
+            <LinkButton href="/catch-up" className="h-9 rounded-xl px-3 text-sm">Catch up from SMS</LinkButton>
+          </div>
         )}
       </section>
 

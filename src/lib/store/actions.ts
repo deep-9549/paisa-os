@@ -10,7 +10,8 @@ import { computeSplit, type Participant } from "../domain/friends";
 import { roundUp } from "../domain/goals";
 import { appliedShares, blockedAmount, issuePrice, realisedPnl, releaseOnAllotment } from "../domain/ipo";
 import { isSalaryIncome } from "../domain/ledger";
-import { merchantKey } from "../domain/parser";
+import { keywordCategory, merchantKey } from "../domain/parser";
+import type { SmsDraft } from "../domain/sms";
 import type { RecurringCandidate } from "../domain/recurring";
 import { round2 } from "../domain/money";
 import type {
@@ -329,6 +330,27 @@ export function addRefund(orig: Transaction, amount: number, date: string) {
 export function confirmDraft(t: Transaction, amount?: number) {
   commit([up("transactions", { ...t, is_draft: false, amount: amount ?? t.amount, updated_at: nowIso() })]);
   toast("Confirmed");
+}
+
+/** A parsed bank SMS as a new transaction: card by last 4 digits, category from memory, rules or keywords. */
+export function smsToTxn(s: SmsDraft, d: Tables = getData()): NewTxnInput {
+  const card = s.isCard && s.last4 ? d.credit_cards.find((c) => c.last4 === s.last4) : undefined;
+  const mem = s.merchant ? autoFill(s.merchant, d) : null;
+  const account = card?.account_id ?? (mem?.account_id && d.accounts.some((a) => a.id === mem.account_id) ? mem.account_id : null) ?? defaultAccountFor(s.isCard ? "card" : s.method, d)?.id ?? null;
+  if (s.direction === "credit") {
+    const path = s.merchant ? keywordCategory(s.merchant) : null;
+    return {
+      type: "income", amount: s.amount, account_id: account && !d.credit_cards.some((c) => c.account_id === account) ? account : defaultAccountFor("upi", d)?.id ?? null,
+      method: s.method, merchant: s.merchant, category_id: (path?.startsWith("Income") ? categoryByPath(path, d.categories)?.id : categoryByPath("Income › Other income", d.categories)?.id) ?? null,
+      occurred_at: dateToTs(s.date ?? istDate()), note: "From SMS",
+    };
+  }
+  const path = s.merchant ? keywordCategory(s.merchant) : null;
+  return {
+    type: "expense", amount: s.amount, account_id: account, method: card ? "card" : s.method, merchant: s.merchant,
+    category_id: mem?.category_id ?? (path ? categoryByPath(path, d.categories)?.id ?? null : null),
+    occurred_at: dateToTs(s.date ?? istDate()), note: "From SMS",
+  };
 }
 
 // ---------------- credit cards ----------------

@@ -1,11 +1,11 @@
 "use client";
 
-import { Search, SlidersHorizontal } from "lucide-react";
+import { MessageSquareText, Search, SlidersHorizontal } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
 import { TxnDetailSheet } from "@/components/TxnDetail";
 import { groupByDay, TxnRow } from "@/components/TxnRow";
-import { Amount, Button, Chip, Empty, Input, PageHeader, Segmented, Select, Sheet, cn } from "@/components/ui";
+import { Amount, Button, Chip, Empty, Input, LinkButton, PageHeader, Segmented, Select, Sheet, cn } from "@/components/ui";
 import { addDays, clampedDate, dayHeading, fmtDate, fmtMonth, parseDate, toDateStr } from "@/lib/domain/dates";
 import { budgetImpact, isLive, spendInRange, txnDate } from "@/lib/domain/ledger";
 import { formatINR } from "@/lib/domain/money";
@@ -88,6 +88,7 @@ function Activity() {
         subtitle={filtering ? <>{filtered.length} match{filtered.length === 1 ? "" : "es"} · budget impact <Amount value={total} /></> : `${filtered.length} transactions`}
         action={
           <>
+            {!selecting && <LinkButton href="/catch-up" className="h-9 rounded-xl px-3"><MessageSquareText size={15} aria-hidden /> Catch up</LinkButton>}
             <Button size="sm" variant={selecting ? "primary" : "secondary"} onClick={() => { setSelecting(!selecting); setSelected(new Set()); }}>
               {selecting ? "Done" : "Select"}
             </Button>

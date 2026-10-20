@@ -7,7 +7,7 @@ import { blockedAmount, listingGainPct, realisedPnl, releaseOnAllotment, taxEsti
 import { normalizeSpoken, parseQuickAdd } from "../parser";
 import { detectRecurring, expectedAmount, occurrences } from "../recurring";
 import { computeSafeToSpend } from "../safeToSpend";
-import { parseBankSms } from "../sms";
+import { isTransactionSms, likelyLogged, parseBankSms, splitSmsBatch } from "../sms";
 import { acct, txn } from "./fixtures";
 
 const rule = (over: Partial<RecurringRule> = {}): RecurringRule => ({
@@ -301,5 +301,30 @@ describe("voice quick-add", () => {
   it("feeds the normal parser", () => {
     const p = parseQuickAdd(normalizeSpoken("Rs 80 chai yesterday"));
     expect(p).toMatchObject({ amount: 80, daysAgo: 1, categoryPath: "Food › Tea & snacks" });
+  });
+});
+
+describe("bulk SMS", () => {
+  const a = "Rs.450.00 debited from A/c XX1234 on 18-10-26 to VPA swiggy@icici UPI Ref 123456789. -Bank of India";
+  const b = "INR 1,200 spent on BOI RuPay Credit Card XX4821 at AMAZON on 17-Oct-26. Avl limit Rs 1,20,000";
+  const otp = "123456 is your OTP for txn of Rs 500 at Flipkart. Do not share.";
+  it("splits on blank lines and on money lines", () => {
+    expect(splitSmsBatch(`${a}\n\n${b}\n\n${otp}`)).toEqual([a, b]);
+    expect(splitSmsBatch(`${a}\n${b}`)).toEqual([a, b]);
+  });
+  it("joins a message wrapped over lines", () => {
+    expect(splitSmsBatch("Rs.450.00 debited from A/c XX1234\non 18-10-26 to VPA swiggy@icici")).toEqual(["Rs.450.00 debited from A/c XX1234 on 18-10-26 to VPA swiggy@icici"]);
+  });
+  it("spots messages already logged", () => {
+    const istOf = (ts: string) => ts.slice(0, 10);
+    const logged = [txn({ amount: 450, date: "2026-10-18" })];
+    expect(likelyLogged({ amount: 450, direction: "debit", date: "2026-10-18" }, logged, istOf)).toBe(true);
+    expect(likelyLogged({ amount: 450, direction: "debit", date: "2026-10-21" }, logged, istOf)).toBe(false);
+    expect(likelyLogged({ amount: 450, direction: "credit", date: "2026-10-18" }, logged, istOf)).toBe(false);
+    expect(likelyLogged({ amount: 451, direction: "debit", date: "2026-10-18" }, logged, istOf)).toBe(false);
+  });
+  it("ignores OTPs and non-money messages", () => {
+    expect(isTransactionSms(otp)).toBe(false);
+    expect(isTransactionSms("Your statement is ready")).toBe(false);
   });
 });

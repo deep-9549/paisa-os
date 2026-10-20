@@ -166,3 +166,23 @@ test("Voice quick-add: speech becomes a parsed spend", async ({ page }) => {
   await expect(page.getByText("Shopping › Clothes").first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Save ₹2,000/ })).toBeVisible();
 });
+
+test("Catch up: paste bank SMS, review, import", async ({ page }) => {
+  await onboard(page);
+  await quickAdd(page, "450 swiggy upi");
+  await page.getByRole("button", { name: /^Save ₹450/ }).click();
+  await reload(page, "/catch-up");
+  const [y, m, d] = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date()).split("-");
+  const dd = `${d}-${m}-${y.slice(2)}`;
+  await page.getByLabel("Bank SMS").fill(
+    `Rs.450.00 debited from A/c XX1234 on ${dd} to VPA swiggy@icici UPI Ref 123456789. -Bank of India\n\n` +
+      `INR 1,200 spent on BOI RuPay Credit Card XX4821 at AMAZON on ${dd}.\n\n` +
+      "123456 is your OTP for txn of Rs 999. Do not share.",
+  );
+  await expect(page.getByText("2 found · 1 to import")).toBeVisible(); // the Swiggy one looks already logged…
+  await expect(page.getByText("already logged?")).toBeVisible();
+  await page.getByRole("button", { name: "Import 1 transaction" }).click();
+  await expect(page).toHaveURL(/activity/);
+  // …the Amazon card swipe lands on the card matched by its last 4 digits.
+  await expect(page.getByRole("button", { name: /Amazon.*BOI RuPay Credit Card/ }).first()).toBeVisible();
+});
